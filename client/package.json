@@ -1,0 +1,25 @@
+{
+  "name": "review-management-client",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.1",
+    "@vueuse/core": "^13.0.0",
+    "axios": "^1.8.4",
+    "dayjs": "^1.11.10",
+    "echarts": "^5.6.0",
+    "element-plus": "^2.4.4",
+    "pinia": "^3.0.1",
+    "vue": "^3.3.11",
+    "vue-router": "^4.2.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.5.2",
+    "vite": "^5.0.10"
+  }
+}
