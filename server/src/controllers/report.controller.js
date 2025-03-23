@@ -78,10 +78,12 @@ exports.generateReport = async (req, res) => {
 
 exports.exportReport = async (req, res) => {
   try {
+    console.log('开始导出报表:', req.body);
     const { project, startDate, endDate } = req.body
 
     // 验证必要参数
     if (!project || !startDate || !endDate) {
+      console.warn('导出参数不完整:', req.body);
       return res.status(400).json({
         success: false,
         message: '缺少必要参数'
@@ -97,8 +99,21 @@ exports.exportReport = async (req, res) => {
       }
     }
 
+    console.log('执行导出查询:', query);
+    
+    // 统计总记录数，避免过大的查询
+    const totalCount = await Review.countDocuments(query);
+    console.log(`找到 ${totalCount} 条记录将被导出`);
+    
+    // 避免内存溢出，使用流式处理
+    const MAX_RECORDS = 5000;
+    if (totalCount > MAX_RECORDS) {
+      console.warn(`警告: 导出记录数 (${totalCount}) 超过推荐限制 (${MAX_RECORDS})`);
+    }
+
     // 获取评价记录
-    const reviews = await Review.find(query).sort({ orderDate: 1 })
+    const reviews = await Review.find(query).sort({ orderDate: 1 }).limit(MAX_RECORDS);
+    console.log(`实际导出 ${reviews.length} 条记录`);
 
     // 创建工作簿
     const workbook = new ExcelJS.Workbook()
@@ -163,13 +178,16 @@ exports.exportReport = async (req, res) => {
       `attachment; filename=${encodeURIComponent(`${project}评价记录_${startDate}_${endDate}.xlsx`)}`
     )
 
+    console.log('开始写入Excel文件到响应流');
     await workbook.xlsx.write(res)
     res.end()
+    console.log('Excel文件导出完成');
   } catch (error) {
-    console.error('导出报表失败:', error)
+    console.error('导出报表失败:', error.stack || error);
     res.status(500).json({
       success: false,
-      message: '导出报表失败'
+      message: '导出报表失败',
+      error: error.message
     })
   }
 }
@@ -179,10 +197,12 @@ exports.exportReport = async (req, res) => {
  */
 exports.getFullReportData = async (req, res) => {
   try {
-    const { project, startDate, endDate } = req.body
+    console.log('开始请求完整报表数据:', req.body);
+    const { project, startDate, endDate, limit = 1000 } = req.body
     
     // 验证必要参数
     if (!project || !startDate || !endDate) {
+      console.warn('请求参数不完整:', req.body);
       return res.status(400).json({
         success: false,
         message: '缺少必要参数'
@@ -198,8 +218,16 @@ exports.getFullReportData = async (req, res) => {
       }
     }
     
-    // 获取评价记录，包含所有字段和截图信息
-    const reviews = await Review.find(query).sort({ orderDate: 1 })
+    console.log('执行报表查询:', query);
+    
+    // 统计总记录数，用于分页
+    const totalCount = await Review.countDocuments(query);
+    console.log(`找到 ${totalCount} 条记录，开始处理...`);
+    
+    // 如果数据量很大，限制返回记录数量以避免内存问题
+    const reviews = await Review.find(query)
+      .sort({ orderDate: 1 })
+      .limit(parseInt(limit, 10));
     
     // 计算统计数据
     const totalAmount = reviews.reduce((sum, r) => sum + (r.amount || 0), 0)
@@ -219,6 +247,11 @@ exports.getFullReportData = async (req, res) => {
       reviewTypePercentage[type] = ((reviewTypeStats[type] / reviews.length) * 100).toFixed(1)
     })
     
+    // 如果总记录数超过了限制值，添加警告信息
+    const hasMoreData = totalCount > limit;
+    
+    console.log(`报表数据处理完成, 返回 ${reviews.length} 条记录`);
+    
     res.json({
       success: true,
       data: {
@@ -228,15 +261,18 @@ exports.getFullReportData = async (req, res) => {
           totalAmount,
           averageAmount,
           reviewTypeStats,
-          reviewTypePercentage
+          reviewTypePercentage,
+          totalAvailableRecords: totalCount,
+          hasMoreData
         }
       }
     })
   } catch (error) {
-    console.error('获取PDF报表数据失败:', error)
+    console.error('获取PDF报表数据失败:', error.stack || error);
     res.status(500).json({
       success: false,
-      message: '获取PDF报表数据失败'
+      message: '获取PDF报表数据失败',
+      error: error.message
     })
   }
 } 

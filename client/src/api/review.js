@@ -37,19 +37,37 @@ instance.interceptors.response.use(
     return response.data;
   },
   error => {
-    // 处理401未授权错误
-    if (error.response && error.response.status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      window.location.href = '/login'
-      return Promise.reject(new Error('会话已过期，请重新登录'))
+    console.error('API请求错误:', error.message, error.config?.url);
+    
+    // 详细记录错误信息
+    if (error.response) {
+      console.error('错误状态:', error.response.status);
+      console.error('错误头信息:', error.response.headers);
+      
+      // 处理401未授权错误
+      if (error.response.status === 401) {
+        console.warn('用户认证失败，即将重定向到登录页面');
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        window.location.href = '/login'
+        return Promise.reject(new Error('会话已过期，请重新登录'))
+      }
+      
+      // 处理500服务器错误
+      if (error.response.status === 500) {
+        console.error('服务器内部错误', error.response.data);
+        return Promise.reject(new Error('服务器内部错误，请稍后重试'));
+      }
     }
     
     // 处理非JSON响应
     if (error.response && error.response.data instanceof Blob) {
       // 如果响应是Blob但不是期望的类型，可能是HTML错误页面
       return error.response.data.text().then(text => {
+        console.error('收到非JSON响应:', text.substring(0, 500));
+        
         if (text.includes('<!DOCTYPE html>')) {
+          console.warn('服务器返回了HTML页面而非API数据，可能是认证问题');
           localStorage.removeItem('token')
           localStorage.removeItem('user')
           window.location.href = '/login'
@@ -57,6 +75,12 @@ instance.interceptors.response.use(
         }
         return Promise.reject(new Error(text || '请求失败'))
       })
+    }
+    
+    // 处理网络错误
+    if (error.message && error.message.includes('Network Error')) {
+      console.error('网络连接错误，无法连接到服务器');
+      return Promise.reject(new Error('网络连接失败，请检查网络后重试'));
     }
     
     return Promise.reject(error)
