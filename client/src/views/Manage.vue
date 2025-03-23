@@ -347,15 +347,13 @@
           
           <el-upload
             class="screenshot-uploader"
-            :action="`/api/reviews/${form._id}/screenshots`"
             :headers="uploadHeaders"
             :show-file-list="false"
-            :on-success="handleUploadSuccess"
-            :on-error="handleUploadError"
             :before-upload="beforeUpload"
             :multiple="true"
             :disabled="!form._id"
             name="screenshot"
+            :http-request="customUpload"
           >
             <div class="upload-trigger">
               <el-icon class="upload-icon"><Plus /></el-icon>
@@ -383,11 +381,22 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Picture, Plus, Delete } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
+import { 
+  getReviews, 
+  updateReview, 
+  deleteReview, 
+  uploadScreenshot, 
+  createReview, 
+  getReviewDetail,
+  batchDeleteReviews,
+  exportReviews,
+  deleteScreenshot
+} from '@/api/review'
 
 const router = useRouter()
 const formRef = ref(null)
@@ -499,28 +508,10 @@ const fetchData = async () => {
       }
     })
 
-    const response = await fetch('/api/reviews?' + new URLSearchParams(params), {
-      credentials: 'include'
-    })
-
-    if (response.status === 401) {
-      ElMessage.error('登录已过期，请重新登录')
-      localStorage.removeItem('user')
-      router.push('/login')
-      return
-    }
-
-    if (!response.ok) {
-      throw new Error('获取数据失败')
-    }
-
-    const data = await response.json()
-    if (data.success) {
-      tableData.value = data.reviews || []
-      total.value = data.pagination?.total || 0
-    } else {
-      throw new Error(data.message || '获取数据失败')
-    }
+    // 使用我们的API方法替代fetch
+    const data = await getReviews(params)
+    tableData.value = data.reviews || []
+    total.value = data.pagination?.total || 0
   } catch (error) {
     console.error('获取数据失败:', error)
     ElMessage.error(error.message || '获取数据失败')
@@ -566,61 +557,48 @@ const handleEdit = async (row) => {
   if (!checkAuth()) return
 
   dialogTitle.value = '编辑评价记录'
-  
-  // 清空表单
-  Object.keys(form).forEach(key => {
-    if (key !== 'pfCancelled' && key !== 'hlyCancelled') {
-      form[key] = null
-    } else {
-      form[key] = false
-    }
-  })
-  
-  form._id = row._id // 确保设置表单的_id字段
-  
+
   try {
-    // 获取完整记录数据（包含截图信息）
-    const response = await fetch(`/api/reviews/${row._id}`, {
-      credentials: 'include'
+    loading.value = true
+    const response = await getReviewDetail(row._id)
+    const reviewData = response.data  // 获取响应中的data字段
+    
+    console.log('获取到的评价详情:', reviewData)  // 添加调试信息
+    
+    // 重置表单
+    Object.keys(form).forEach(key => {
+      if (reviewData[key] !== undefined) {
+        form[key] = reviewData[key]
+      }
     })
-
-    if (response.status === 401) {
-      ElMessage.error('登录已过期，请重新登录')
-      localStorage.removeItem('user')
-      router.push('/login')
-      return
+    
+    form._id = reviewData._id
+    
+    // 修复日期格式
+    if (reviewData.orderDate) {
+      form.orderDate = dayjs(reviewData.orderDate).format('YYYY-MM-DD HH:mm:ss')
     }
-
-    if (!response.ok) {
-      throw new Error('获取数据失败')
+    
+    if (reviewData.travelDate) {
+      form.travelDate = dayjs(reviewData.travelDate).format('YYYY-MM-DD')
     }
-
-    const result = await response.json()
-    if (result.success) {
-      // 复制数据到表单
-      const review = result.data
-      Object.keys(form).forEach(key => {
-        if (review[key] !== undefined) {
-          if (key === 'orderDate' && review[key]) {
-            form[key] = dayjs(review[key]).format('YYYY-MM-DD HH:mm:ss')
-          } else if ((key === 'travelDate' || key === 'reviewDate') && review[key]) {
-            form[key] = dayjs(review[key]).format('YYYY-MM-DD')
-          } else {
-            form[key] = review[key]
-          }
-        }
-      })
-      
-      // 确保拥有 _id
-      form._id = review._id
-      
-      dialogVisible.value = true
-    } else {
-      throw new Error(result.message || '获取数据失败')
+    
+    if (reviewData.reviewDate) {
+      form.reviewDate = dayjs(reviewData.reviewDate).format('YYYY-MM-DD')
     }
+    
+    // 确保screenshots存在
+    form.screenshots = reviewData.screenshots || []
+    form.screenshot = reviewData.screenshot || ''
+    
+    console.log('处理后的表单数据:', JSON.stringify(form, null, 2))  // 添加调试信息
+    
+    loading.value = false
+    dialogVisible.value = true
   } catch (error) {
     console.error('获取数据失败:', error)
     ElMessage.error(error.message || '获取数据失败')
+    loading.value = false
   }
 }
 
@@ -635,29 +613,9 @@ const handleDelete = async (row) => {
       type: 'warning'
     })
 
-    const response = await fetch('/api/reviews/' + row._id, {
-      method: 'DELETE',
-      credentials: 'include'
-    })
-
-    if (response.status === 401) {
-      ElMessage.error('登录已过期，请重新登录')
-      localStorage.removeItem('user')
-      router.push('/login')
-      return
-    }
-
-    if (!response.ok) {
-      throw new Error('删除失败')
-    }
-
-    const data = await response.json()
-    if (data.success) {
-      ElMessage.success('删除成功')
-      fetchData()
-    } else {
-      throw new Error(data.message || '删除失败')
-    }
+    await deleteReview(row._id)
+    ElMessage.success('删除成功')
+    fetchData()
   } catch (error) {
     if (error !== 'cancel') {
       console.error('删除失败:', error)
@@ -674,41 +632,21 @@ const handleSave = async () => {
   try {
     await formRef.value.validate()
     
-    const method = form._id ? 'PUT' : 'POST'
-    const url = form._id ? `/api/reviews/${form._id}` : '/api/reviews'
-    
     // 创建要提交的表单数据（排除screenshots，它通过单独的API处理）
     const submitData = { ...form }
     delete submitData.screenshots
     
-    const response = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      credentials: 'include',
-      body: JSON.stringify(submitData)
-    })
-
-    if (response.status === 401) {
-      ElMessage.error('登录已过期，请重新登录')
-      localStorage.removeItem('user')
-      router.push('/login')
-      return
-    }
-
-    if (!response.ok) {
-      throw new Error('保存失败')
-    }
-
-    const data = await response.json()
-    if (data.success) {
-      ElMessage.success('保存成功')
-      dialogVisible.value = false
-      fetchData()
+    if (form._id) {
+      // 更新
+      await updateReview(form._id, submitData)
     } else {
-      throw new Error(data.message || '保存失败')
+      // 新建 - 需要在review.js中添加createReview方法
+      await createReview(submitData)
     }
+    
+    ElMessage.success('保存成功')
+    dialogVisible.value = false
+    fetchData()
   } catch (error) {
     console.error('保存失败:', error)
     ElMessage.error(error.message || '保存失败')
@@ -720,6 +658,24 @@ const uploadHeaders = computed(() => {
   const user = localStorage.getItem('user')
   return user ? { Authorization: `Bearer ${user}` } : {}
 })
+
+// 自定义上传方法
+const customUpload = async (options) => {
+  try {
+    if (!form._id) {
+      ElMessage.warning('请先保存评价记录，然后才能上传截图')
+      return
+    }
+
+    const formData = new FormData()
+    formData.append('screenshot', options.file)
+    
+    const response = await uploadScreenshot(form._id, formData)
+    handleUploadSuccess(response, options.file)
+  } catch (error) {
+    handleUploadError(error)
+  }
+}
 
 const beforeUpload = (file) => {
   // 检查用户是否登录
@@ -778,11 +734,14 @@ const handleSelectionChange = (rows) => {
 // 批量删除
 const handleBatchDelete = async () => {
   if (!checkAuth()) return
-  if (selectedRows.value.length === 0) return
+  if (selectedRows.value.length === 0) {
+    ElMessage.warning('请至少选择一条记录')
+    return
+  }
 
   try {
     await ElMessageBox.confirm(
-      `确定要删除选中的 ${selectedRows.value.length} 条记录吗？`,
+      `确定要删除选中的 ${selectedRows.value.length} 条记录吗？此操作不可恢复！`,
       '提示',
       {
         confirmButtonText: '确定',
@@ -792,34 +751,11 @@ const handleBatchDelete = async () => {
     )
 
     const ids = selectedRows.value.map(row => row._id)
-    const response = await fetch('/api/reviews/batch', {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      credentials: 'include',
-      body: JSON.stringify({ ids })
-    })
-
-    if (response.status === 401) {
-      ElMessage.error('登录已过期，请重新登录')
-      localStorage.removeItem('user')
-      router.push('/login')
-      return
-    }
-
-    if (!response.ok) {
-      throw new Error('批量删除失败')
-    }
-
-    const data = await response.json()
-    if (data.success) {
-      ElMessage.success('批量删除成功')
-      selectedRows.value = []
-      fetchData()
-    } else {
-      throw new Error(data.message || '批量删除失败')
-    }
+    await batchDeleteReviews(ids)
+    
+    ElMessage.success('批量删除成功')
+    selectedRows.value = []
+    fetchData()
   } catch (error) {
     if (error !== 'cancel') {
       console.error('批量删除失败:', error)
@@ -831,38 +767,21 @@ const handleBatchDelete = async () => {
 // 导出选中记录
 const handleExport = async () => {
   if (!checkAuth()) return
-  if (selectedRows.value.length === 0) return
+  if (selectedRows.value.length === 0) {
+    ElMessage.warning('请至少选择一条记录')
+    return
+  }
 
   try {
     const ids = selectedRows.value.map(row => row._id)
-    const response = await fetch('/api/reviews/export', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      credentials: 'include',
-      body: JSON.stringify({ ids })
-    })
-
-    if (response.status === 401) {
-      ElMessage.error('登录已过期，请重新登录')
-      localStorage.removeItem('user')
-      router.push('/login')
-      return
-    }
-
-    // 获取文件名
-    const contentDisposition = response.headers.get('content-disposition')
-    const fileName = contentDisposition
-      ? decodeURIComponent(contentDisposition.split('filename=')[1].replace(/"/g, ''))
-      : '评价记录.xlsx'
-
+    const response = await exportReviews(ids)
+    
     // 下载文件
-    const blob = await response.blob()
+    const blob = new Blob([response], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.setAttribute('download', fileName)
+    link.setAttribute('download', '评价记录.xlsx')
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -877,6 +796,13 @@ const handleExport = async () => {
 
 // 删除截图
 const handleDeleteScreenshot = async (screenshotId) => {
+  // 确保截图ID是有效的
+  if (!screenshotId) {
+    console.error('删除截图失败: 无效的截图ID')
+    ElMessage.error('删除截图失败: 无效的截图ID')
+    return
+  }
+
   try {
     await ElMessageBox.confirm('确定要删除这张截图吗?', '提示', {
       confirmButtonText: '确定',
@@ -884,28 +810,16 @@ const handleDeleteScreenshot = async (screenshotId) => {
       type: 'warning'
     })
     
-    const response = await fetch(`/api/reviews/${form._id}/screenshots/${screenshotId}`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      credentials: 'include'
-    })
+    await deleteScreenshot(form._id, screenshotId)
     
-    const data = await response.json()
+    ElMessage.success('删除截图成功')
     
-    if (data.success) {
-      ElMessage.success('删除截图成功')
-      
-      const index = form.screenshots.findIndex(item => item._id === screenshotId)
-      if (index !== -1) {
-        form.screenshots.splice(index, 1)
-      }
-      
-      fetchData()
-    } else {
-      throw new Error(data.message || '删除失败')
+    const index = form.screenshots.findIndex(item => item._id === screenshotId)
+    if (index !== -1) {
+      form.screenshots.splice(index, 1)
     }
+    
+    fetchData()
   } catch (error) {
     if (error.message !== 'cancel') {
       ElMessage.error(error.message || '删除截图失败')

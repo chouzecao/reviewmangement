@@ -51,6 +51,7 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
+import { login } from '@/api/auth'
 
 const router = useRouter()
 const loading = ref(false)
@@ -80,20 +81,8 @@ const handleLogin = async () => {
     await loginFormRef.value.validate()
     loading.value = true
 
-    const response = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(loginForm),
-      credentials: 'include'
-    })
-
-    if (!response.ok) {
-      throw new Error('登录失败')
-    }
-
-    const data = await response.json()
+    const data = await login(loginForm)
+    localStorage.setItem('token', data.token)
     localStorage.setItem('user', JSON.stringify(data.user))
     ElMessage.success('登录成功')
     router.push('/')

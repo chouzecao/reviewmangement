@@ -172,4 +172,71 @@ exports.exportReport = async (req, res) => {
       message: '导出报表失败'
     })
   }
+}
+
+/**
+ * 获取完整的PDF报表数据
+ */
+exports.getFullReportData = async (req, res) => {
+  try {
+    const { project, startDate, endDate } = req.body
+    
+    // 验证必要参数
+    if (!project || !startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少必要参数'
+      })
+    }
+    
+    // 构建查询条件
+    const query = {
+      project,
+      orderDate: {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      }
+    }
+    
+    // 获取评价记录，包含所有字段和截图信息
+    const reviews = await Review.find(query).sort({ orderDate: 1 })
+    
+    // 计算统计数据
+    const totalAmount = reviews.reduce((sum, r) => sum + (r.amount || 0), 0)
+    const averageAmount = reviews.length ? totalAmount / reviews.length : 0
+    
+    // 计算评价类型分布
+    const reviewTypeStats = reviews.reduce((stats, r) => {
+      if (r.reviewType) {
+        stats[r.reviewType] = (stats[r.reviewType] || 0) + 1
+      }
+      return stats
+    }, {})
+    
+    // 计算评价类型百分比
+    const reviewTypePercentage = {}
+    Object.keys(reviewTypeStats).forEach(type => {
+      reviewTypePercentage[type] = ((reviewTypeStats[type] / reviews.length) * 100).toFixed(1)
+    })
+    
+    res.json({
+      success: true,
+      data: {
+        reviews,
+        summary: {
+          totalOrders: reviews.length,
+          totalAmount,
+          averageAmount,
+          reviewTypeStats,
+          reviewTypePercentage
+        }
+      }
+    })
+  } catch (error) {
+    console.error('获取PDF报表数据失败:', error)
+    res.status(500).json({
+      success: false,
+      message: '获取PDF报表数据失败'
+    })
+  }
 } 

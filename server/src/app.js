@@ -1,5 +1,6 @@
 const express = require('express');
 const session = require('express-session');
+const MongoStore = require('connect-mongo');
 const cors = require('cors');
 const path = require('path');
 const config = require('./config/config');
@@ -10,14 +11,29 @@ connectDB();
 
 const app = express();
 
-// 中间件
+// CORS中间件配置，明确允许所有跨域请求
 app.use(cors({
-    origin: true,
+    origin: '*',  // 允许所有域名的请求
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(session(config.session));
+
+// 配置会话，使用MongoDB作为存储
+const sessionConfig = {
+    ...config.session,
+    store: MongoStore.create({
+        mongoUrl: config.db.uri,
+        ttl: 60 * 60 * 24, // 会话保存1天
+        autoRemove: 'native', // 使用MongoDB的TTL索引自动移除过期会话
+        touchAfter: 24 * 3600 // 每24小时更新会话，无论活动多少次
+    })
+};
+
+app.use(session(sessionConfig));
 
 // 静态文件服务
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
@@ -31,6 +47,11 @@ app.use('/api/auth', authRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/reports', reportRoutes);
 
+// 添加健康检查路由
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok' });
+});
+
 // 错误处理中间件
 app.use((err, req, res, next) => {
     console.error(err.stack);
@@ -38,7 +59,7 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = config.server.port;
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`服务器运行在端口 ${PORT}`);
 });
 

@@ -11,6 +11,12 @@ router.use(authMiddleware);
 // 生成月度报表
 router.post('/generate', reportController.generateReport);
 
+// 导出报表数据
+router.post('/export', reportController.exportReport);
+
+// 获取完整的PDF报表数据
+router.post('/full-data', reportController.getFullReportData);
+
 // 获取月度报表列表
 router.get('/monthly', async (req, res) => {
     try {

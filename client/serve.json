@@ -1,0 +1,23 @@
+{
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "${API_URL:-http://localhost:3000}/api/:path*" },
+    { "source": "/uploads/:path*", "destination": "${API_URL:-http://localhost:3000}/uploads/:path*" }
+  ],
+  "headers": [
+    {
+      "source": "**/*",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+        { "key": "Access-Control-Allow-Origin", "value": "*" }
+      ]
+    },
+    {
+      "source": "/api/**",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, PUT, DELETE, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Origin, X-Requested-With, Content-Type, Accept, Authorization" }
+      ]
+    }
+  ]
+}

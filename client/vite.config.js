@@ -23,5 +23,20 @@ export default defineConfig({
         changeOrigin: true
       }
     }
+  },
+  build: {
+    outDir: 'dist',
+    assetsDir: 'assets',
+    // 防止过大的vendor包
+    chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor': ['vue', 'vue-router', 'pinia', 'axios'],
+          'element-plus': ['element-plus'],
+          'echarts': ['echarts']
+        }
+      }
+    }
   }
 })
