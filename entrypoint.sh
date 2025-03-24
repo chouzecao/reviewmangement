@@ -125,9 +125,9 @@ log "等待后端服务启动 (15秒)..."
 for i in {1..15}; do
     log "等待后端服务启动: $i 秒"
     sleep 1
-    if grep -q "Listening on" server.log; then
+    if grep -q "服务器运行在端口" server.log; then
         log "后端服务已启动，监听端口信息:"
-        grep "Listening on" server.log | while read line; do log "  $line"; done
+        grep "服务器运行在端口" server.log | while read line; do log "  $line"; done
         break
     fi
 done
@@ -177,116 +177,15 @@ cd /home/devbox/project/client || {
 }
 log "当前目录: $(pwd)"
 
-# 设置前端服务配置
-export SERVE_OPTIONS="--symlinks --no-clipboard --single"
-log "前端服务选项: ${SERVE_OPTIONS}"
-
-# 创建并验证serve.json配置（采用固定的方式，不再尝试不同选项）
-log "创建serve.json配置文件..."
-mkdir -p dist
-
-# 注意：先同时尝试多种请求方式来确认API服务可用性
-log "检查API端点可用性..."
-API_AVAILABLE=false
-TEST_ENDPOINTS=(
-    "http://127.0.0.1:${PORT}/api/health"
-    "http://localhost:${PORT}/api/health"
-    "http://0.0.0.0:${PORT}/api/health"
-)
-
-for endpoint in "${TEST_ENDPOINTS[@]}"; do
-    log "测试API端点: $endpoint"
-    if command -v curl > /dev/null; then
-        RESULT=$(curl -s -m 2 -o /dev/null -w "%{http_code}" "$endpoint" || echo "failed")
-        log "  结果: $RESULT"
-        if [[ "$RESULT" == "200" ]]; then
-            API_ENDPOINT="$endpoint"
-            API_AVAILABLE=true
-            log "API端点可用: $API_ENDPOINT"
-            break
-        fi
-    elif command -v wget > /dev/null; then
-        if wget -q -O /dev/null -T 2 "$endpoint"; then
-            API_ENDPOINT="$endpoint"
-            API_AVAILABLE=true
-            log "API端点可用: $API_ENDPOINT"
-            break
-        else
-            log "  连接失败"
-        fi
-    else
-        log "无可用的HTTP请求工具"
-        break
-    fi
-done
-
-# 如果所有端点测试都失败，手动添加路由
-if [ "$API_AVAILABLE" = "false" ]; then
-    log_error "警告: 所有API端点测试失败"
-    
-    # 尝试telnet测试端口连通性
-    if command -v telnet > /dev/null; then
-        log "测试端口连通性 (telnet):"
-        echo "quit" | telnet 127.0.0.1 ${PORT} 2>&1 | while read line; do log "  $line"; done
-    fi
-    
-    log "将使用直接代理配置"
-    # 使用简单的转发配置
-    cat > serve.json << EOFINNER
-{
-  "rewrites": [
-    { "source": "/api/**", "destination": "http://127.0.0.1:${PORT}/api/**" },
-    { "source": "/uploads/**", "destination": "http://127.0.0.1:${PORT}/uploads/**" }
-  ],
-  "headers": [
-    {
-      "source": "**/*",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
-        { "key": "Access-Control-Allow-Origin", "value": "*" }
-      ]
-    }
-  ]
-}
-EOFINNER
-else
-    # 使用确认可用的端点配置代理
-    API_HOST=$(echo "$API_ENDPOINT" | sed 's|http://\([^:]*\):.*|\1|')
-    log "使用已验证的API主机: $API_HOST"
-    
-    cat > serve.json << EOFINNER
-{
-  "rewrites": [
-    { "source": "/api/**", "destination": "http://${API_HOST}:${PORT}/api/**" },
-    { "source": "/uploads/**", "destination": "http://${API_HOST}:${PORT}/uploads/**" }
-  ],
-  "headers": [
-    {
-      "source": "**/*",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
-        { "key": "Access-Control-Allow-Origin", "value": "*" }
-      ]
-    }
-  ]
-}
-EOFINNER
-fi
-
-log "serve.json 配置文件内容:"
-cat serve.json
-
-# 测试绝对路径URL是否可访问
-if command -v curl > /dev/null; then
-    ABSOLUTE_URL="http://127.0.0.1:${PORT}/api"
-    log "测试绝对URL: $ABSOLUTE_URL"
-    RESULT=$(curl -s -m 2 -o /dev/null -w "%{http_code}" "$ABSOLUTE_URL" || echo "failed")
-    log "  结果: $RESULT"
+# 安装http-server（如果需要）
+if ! command -v http-server > /dev/null; then
+    log "安装http-server..."
+    npm install -g http-server
 fi
 
 # 启动前端服务
 log "启动前端服务..."
-npx serve -s dist -l ${FRONTEND_PORT:-8080} --cors --config ./serve.json ${SERVE_OPTIONS} --debug > frontend.log 2>&1 &
+http-server dist -p ${FRONTEND_PORT:-8080} --proxy http://127.0.0.1:${PORT} --cors --silent > frontend.log 2>&1 &
 FRONTEND_PID=$!
 log "前端服务进程ID: ${FRONTEND_PID}"
 
