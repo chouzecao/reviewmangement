@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const reportController = require('../controllers/report.controller');
-const authMiddleware = require('../middleware/auth.middleware');
+const { authenticate } = require('../middlewares/auth');
 const Review = require('../models/review.model');
 const MonthlyScore = require('../models/monthlyScore.model');
 
 // 应用认证中间件
-router.use(authMiddleware);
+router.use(authenticate);
 
 // 生成月度报表
 router.post('/generate', reportController.generateReport);

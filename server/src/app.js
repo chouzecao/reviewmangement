@@ -13,10 +13,13 @@ const app = express();
 
 // CORS中间件配置，明确允许所有跨域请求
 app.use(cors({
-    origin: '*',  // 允许所有域名的请求
+    origin: function(origin, callback) {
+        // 允许所有来源，但支持withCredentials
+        callback(null, origin);
+    },
+    credentials: true, // 重要：允许携带凭证
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
@@ -48,8 +51,13 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/reports', reportRoutes);
 
 // 添加健康检查路由
+app.get('/api/health', (req, res) => {
+    res.status(200).json({ status: 'ok', time: new Date().toISOString() });
+});
+
+// 保留旧的健康检查路由以兼容现有调用
 app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'ok' });
+    res.status(200).json({ status: 'ok', time: new Date().toISOString() });
 });
 
 // 错误处理中间件

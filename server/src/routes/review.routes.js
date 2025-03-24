@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Excel = require('exceljs');
-const auth = require('../middleware/auth.middleware');
+const { authenticate } = require('../middlewares/auth');
 const Review = require('../models/review.model');
 const reviewController = require('../controllers/review.controller');
 const upload = require('../middleware/upload');
@@ -10,7 +10,7 @@ const upload = require('../middleware/upload');
 router.post('/update-projects', reviewController.updateAllProjects);
 
 // 所有其他路由都需要验证登录
-router.use(auth);
+router.use(authenticate);
 
 // 生成评价记录
 router.post('/generate', reviewController.generateReviews);
