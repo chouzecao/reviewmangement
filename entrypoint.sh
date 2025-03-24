@@ -10,6 +10,11 @@ log_error() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [错误] $1" >&2
 }
 
+# 调试日志
+log_debug() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [调试] $1" >&2
+}
+
 # 设置环境变量
 export NODE_ENV=production
 export PORT=${PORT:-3000}
@@ -29,6 +34,23 @@ log "工作目录: $(pwd)"
 log "系统内存信息:"
 free -h | while read line; do log "  $line"; done
 log "======================="
+
+# 检查网络配置
+log "检查网络配置..."
+log "主机名: $(hostname)"
+log "网络接口:"
+ip addr show | grep -E "inet " | while read line; do log "  $line"; done
+
+# DNS 解析检查
+log "检查DNS解析..."
+if command -v dig > /dev/null || command -v nslookup > /dev/null; then
+    if command -v dig > /dev/null; then
+        dig +short localhost
+        log "localhost DNS解析: $(dig +short localhost)"
+    elif command -v nslookup > /dev/null; then
+        log "localhost DNS解析: $(nslookup localhost | grep Address | tail -n1)"
+    fi
+fi
 
 # 启动后端服务
 log "切换到后端目录..."
@@ -68,46 +90,81 @@ mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 })
   });
 "
 
-# 检查网络情况
-log "检查网络配置..."
-ip addr show | grep -E "inet " | while read line; do log "  $line"; done
-
-# 修改服务器配置，确保监听在0.0.0.0
-log "检查并确保后端服务监听在所有网络接口(0.0.0.0)..."
+# 检查后端配置文件
+log "检查app.js文件..."
 if [ -f "src/app.js" ]; then
-    # 确保app.js中的监听地址是0.0.0.0
-    grep -q "app.listen.*'0.0.0.0'" src/app.js || {
-        log_error "警告: 后端服务可能没有监听在所有接口上，可能导致网络连接问题"
-    }
+    # 显示app.listen部分
+    log "后端服务监听配置:"
+    grep -A 3 "app.listen" src/app.js | while read line; do log "  $line"; done
+fi
+
+# 添加健康检查路由（如果不存在）
+log "确保健康检查端点存在..."
+if [ -f "src/app.js" ]; then
+    if ! grep -q "app.get('/api/health'" src/app.js; then
+        log "添加/api/health路由用于健康检查"
+        # 创建临时文件添加健康检查路由
+        TEMP_FILE=$(mktemp)
+        awk '/app.use/ && !health_added {print "// 添加健康检查路由\napp.get(\"/api/health\", (req, res) => { res.status(200).json({ status: \"ok\", time: new Date().toISOString() }); });\n"; health_added=1} {print}' src/app.js > $TEMP_FILE
+        cat $TEMP_FILE > src/app.js
+        rm $TEMP_FILE
+        log "健康检查路由添加完成"
+    else
+        log "健康检查路由已存在"
+    fi
 fi
 
 # 在后台启动后端服务
 log "启动后端服务..."
-node src/app.js &
+node src/app.js > server.log 2>&1 &
 BACKEND_PID=$!
 log "后端服务进程ID: ${BACKEND_PID}"
 
 # 等待后端服务启动
-log "等待后端服务启动 (10秒)..."
-sleep 10
+log "等待后端服务启动 (15秒)..."
+for i in {1..15}; do
+    log "等待后端服务启动: $i 秒"
+    sleep 1
+    if grep -q "Listening on" server.log; then
+        log "后端服务已启动，监听端口信息:"
+        grep "Listening on" server.log | while read line; do log "  $line"; done
+        break
+    fi
+done
+
+# 显示后端日志
+log "后端服务启动日志 (最近20行):"
+tail -n 20 server.log | while read line; do log "  $line"; done
 
 # 验证后端服务是否正常运行
 if kill -0 $BACKEND_PID 2>/dev/null; then
-    log "后端服务启动成功"
+    log "后端服务进程运行正常"
+    
     # 验证端口是否正在监听
-    if command -v netstat > /dev/null; then
-        log "检查端口状态:"
-        netstat -tulpn 2>/dev/null | grep "LISTEN" | grep ":${PORT}" | while read line; do 
-            log "  $line"
-        done
+    PORTS_LISTENING=false
+    if command -v lsof > /dev/null; then
+        log "检查端口状态 (lsof):"
+        lsof -i :${PORT} | while read line; do log "  $line"; done
+        lsof -i :${PORT} | grep -q LISTEN && PORTS_LISTENING=true
+    elif command -v netstat > /dev/null; then
+        log "检查端口状态 (netstat):"
+        netstat -tulpn 2>/dev/null | grep "LISTEN" | grep ":${PORT}" | while read line; do log "  $line"; done
+        netstat -tulpn 2>/dev/null | grep "LISTEN" | grep ":${PORT}" | grep -q "." && PORTS_LISTENING=true
     elif command -v ss > /dev/null; then
-        log "检查端口状态:"
-        ss -tulpn 2>/dev/null | grep "LISTEN" | grep ":${PORT}" | while read line; do 
-            log "  $line"
-        done
+        log "检查端口状态 (ss):"
+        ss -tulpn 2>/dev/null | grep "LISTEN" | grep ":${PORT}" | while read line; do log "  $line"; done
+        ss -tulpn 2>/dev/null | grep "LISTEN" | grep ":${PORT}" | grep -q "." && PORTS_LISTENING=true
+    fi
+    
+    if [ "$PORTS_LISTENING" = "true" ]; then
+        log "后端服务正在监听端口 ${PORT}"
+    else
+        log_error "警告：未检测到后端服务监听端口 ${PORT}"
     fi
 else
-    log_error "后端服务启动失败"
+    log_error "后端服务进程已退出"
+    log_error "查看错误日志:"
+    cat server.log
     exit 1
 fi
 
@@ -124,66 +181,64 @@ log "当前目录: $(pwd)"
 export SERVE_OPTIONS="--symlinks --no-clipboard --single"
 log "前端服务选项: ${SERVE_OPTIONS}"
 
-# 尝试不同的后端地址选项
-log "测试不同的API连接方式..."
-CONNECTION_OK=false
-
-# 选项1: 检查127.0.0.1
-BACKEND_API="http://127.0.0.1:${PORT}"
-log "尝试连接后端: ${BACKEND_API}"
-if command -v curl > /dev/null; then
-    if curl -s -o /dev/null -w "%{http_code}\n" "${BACKEND_API}/api/health" | grep -q "200"; then
-        log "API连接成功 (127.0.0.1)"
-        CONNECTION_OK=true
-    else
-        log_error "无法连接到后端API (127.0.0.1)"
-    fi
-fi
-
-# 选项2: 如果选项1失败，尝试使用localhost
-if [ "$CONNECTION_OK" = "false" ]; then
-    BACKEND_API="http://localhost:${PORT}"
-    log "尝试连接后端: ${BACKEND_API}"
-    if command -v curl > /dev/null; then
-        if curl -s -o /dev/null -w "%{http_code}\n" "${BACKEND_API}/api/health" | grep -q "200"; then
-            log "API连接成功 (localhost)"
-            CONNECTION_OK=true
-        else
-            log_error "无法连接到后端API (localhost)"
-        fi
-    fi
-fi
-
-# 选项3: 如果前两个选项都失败，尝试使用0.0.0.0
-if [ "$CONNECTION_OK" = "false" ]; then
-    BACKEND_API="http://0.0.0.0:${PORT}"
-    log "尝试连接后端: ${BACKEND_API}"
-    if command -v curl > /dev/null; then
-        if curl -s -o /dev/null -w "%{http_code}\n" "${BACKEND_API}/api/health" | grep -q "200"; then
-            log "API连接成功 (0.0.0.0)"
-            CONNECTION_OK=true
-        else
-            log_error "无法连接到后端API (0.0.0.0)"
-        fi
-    fi
-fi
-
-# 如果所有选项都失败，记录警告但继续尝试
-if [ "$CONNECTION_OK" = "false" ]; then
-    log_error "警告: 所有API连接测试都失败。将使用127.0.0.1作为后备选项"
-    BACKEND_API="http://127.0.0.1:${PORT}"
-fi
-
-log "使用的后端API地址: ${BACKEND_API}"
-
-# 创建并验证serve.json配置
+# 创建并验证serve.json配置（采用固定的方式，不再尝试不同选项）
 log "创建serve.json配置文件..."
 mkdir -p dist
-cat > dist/serve.json << EOFINNER
+
+# 注意：先同时尝试多种请求方式来确认API服务可用性
+log "检查API端点可用性..."
+API_AVAILABLE=false
+TEST_ENDPOINTS=(
+    "http://127.0.0.1:${PORT}/api/health"
+    "http://localhost:${PORT}/api/health"
+    "http://0.0.0.0:${PORT}/api/health"
+)
+
+for endpoint in "${TEST_ENDPOINTS[@]}"; do
+    log "测试API端点: $endpoint"
+    if command -v curl > /dev/null; then
+        RESULT=$(curl -s -m 2 -o /dev/null -w "%{http_code}" "$endpoint" || echo "failed")
+        log "  结果: $RESULT"
+        if [[ "$RESULT" == "200" ]]; then
+            API_ENDPOINT="$endpoint"
+            API_AVAILABLE=true
+            log "API端点可用: $API_ENDPOINT"
+            break
+        fi
+    elif command -v wget > /dev/null; then
+        if wget -q -O /dev/null -T 2 "$endpoint"; then
+            API_ENDPOINT="$endpoint"
+            API_AVAILABLE=true
+            log "API端点可用: $API_ENDPOINT"
+            break
+        else
+            log "  连接失败"
+        fi
+    else
+        log "无可用的HTTP请求工具"
+        break
+    fi
+done
+
+# 如果所有端点测试都失败，手动添加路由
+if [ "$API_AVAILABLE" = "false" ]; then
+    log_error "警告: 所有API端点测试失败"
+    
+    # 尝试telnet测试端口连通性
+    if command -v telnet > /dev/null; then
+        log "测试端口连通性 (telnet):"
+        echo "quit" | telnet 127.0.0.1 ${PORT} 2>&1 | while read line; do log "  $line"; done
+    fi
+    
+    log "将使用直接代理配置"
+    # 使用简单的转发配置
+    cat > dist/serve.json << EOFINNER
 {
+  "public": "dist",
   "rewrites": [
-    { "source": "/api/*", "destination": "${BACKEND_API}/api/:splat" },
-    { "source": "/uploads/*", "destination": "${BACKEND_API}/uploads/:splat" }
+    { "source": "/api", "destination": "http://127.0.0.1:${PORT}/api" },
+    { "source": "/api/**", "destination": "http://127.0.0.1:${PORT}/api/**" },
+    { "source": "/uploads/**", "destination": "http://127.0.0.1:${PORT}/uploads/**" }
   ],
   "headers": [
     {
@@ -192,27 +247,83 @@ cat > dist/serve.json << EOFINNER
         { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
         { "key": "Access-Control-Allow-Origin", "value": "*" }
       ]
-    },
+    }
+  ]
+}
+EOFINNER
+else
+    # 使用确认可用的端点配置代理
+    API_HOST=$(echo "$API_ENDPOINT" | sed 's|http://\([^:]*\):.*|\1|')
+    log "使用已验证的API主机: $API_HOST"
+    
+    cat > dist/serve.json << EOFINNER
+{
+  "public": "dist",
+  "rewrites": [
+    { "source": "/api", "destination": "http://${API_HOST}:${PORT}/api" },
+    { "source": "/api/**", "destination": "http://${API_HOST}:${PORT}/api/**" },
+    { "source": "/uploads/**", "destination": "http://${API_HOST}:${PORT}/uploads/**" }
+  ],
+  "headers": [
     {
-      "source": "/api/**",
+      "source": "**/*",
       "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, PUT, DELETE, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Origin, X-Requested-With, Content-Type, Accept, Authorization" }
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+        { "key": "Access-Control-Allow-Origin", "value": "*" }
       ]
     }
   ]
 }
 EOFINNER
+fi
 
 log "serve.json 配置文件内容:"
 cat dist/serve.json
 
+# 测试绝对路径URL是否可访问
+if command -v curl > /dev/null; then
+    ABSOLUTE_URL="http://127.0.0.1:${PORT}/api"
+    log "测试绝对URL: $ABSOLUTE_URL"
+    RESULT=$(curl -s -m 2 -o /dev/null -w "%{http_code}" "$ABSOLUTE_URL" || echo "failed")
+    log "  结果: $RESULT"
+fi
+
 # 启动前端服务
 log "启动前端服务..."
-npx serve -s dist -l ${FRONTEND_PORT:-8080} --cors --config ./dist/serve.json ${SERVE_OPTIONS} --debug &
+npx serve -s dist -l ${FRONTEND_PORT:-8080} --cors --config ./dist/serve.json ${SERVE_OPTIONS} --debug > frontend.log 2>&1 &
 FRONTEND_PID=$!
 log "前端服务进程ID: ${FRONTEND_PID}"
+
+# 等待前端服务启动
+log "等待前端服务启动 (5秒)..."
+sleep 5
+
+# 显示前端日志
+log "前端服务启动日志 (最近20行):"
+tail -n 20 frontend.log | while read line; do log "  $line"; done
+
+# 验证前端服务是否正常运行
+if kill -0 $FRONTEND_PID 2>/dev/null; then
+    log "前端服务进程运行正常"
+    
+    # 验证端口是否正在监听
+    if command -v lsof > /dev/null; then
+        log "检查前端端口状态 (lsof):"
+        lsof -i :${FRONTEND_PORT:-8080} | while read line; do log "  $line"; done
+    elif command -v netstat > /dev/null; then
+        log "检查前端端口状态 (netstat):"
+        netstat -tulpn 2>/dev/null | grep "LISTEN" | grep ":${FRONTEND_PORT:-8080}" | while read line; do log "  $line"; done
+    elif command -v ss > /dev/null; then
+        log "检查前端端口状态 (ss):"
+        ss -tulpn 2>/dev/null | grep "LISTEN" | grep ":${FRONTEND_PORT:-8080}" | while read line; do log "  $line"; done
+    fi
+else
+    log_error "前端服务进程已退出"
+    log_error "查看错误日志:"
+    cat frontend.log
+    kill -15 $BACKEND_PID
+    exit 1
+fi
 
 # 进程监控函数
 monitor_processes() {
@@ -220,11 +331,15 @@ monitor_processes() {
     while true; do
         if ! kill -0 $BACKEND_PID 2>/dev/null; then
             log_error "后端服务已停止 (PID: ${BACKEND_PID})"
+            log_error "后端服务日志尾部:"
+            tail -n 20 server.log | while read line; do log_error "  $line"; done
             kill -15 $FRONTEND_PID 2>/dev/null || true
             return 1
         fi
         if ! kill -0 $FRONTEND_PID 2>/dev/null; then
             log_error "前端服务已停止 (PID: ${FRONTEND_PID})"
+            log_error "前端服务日志尾部:"
+            tail -n 20 frontend.log | while read line; do log_error "  $line"; done
             kill -15 $BACKEND_PID 2>/dev/null || true
             return 1
         fi
