@@ -14,7 +14,7 @@ echo "后端依赖安装完成"
 # 创建生产环境配置文件
 cat <<EOF > .env.production
 SERVER_PORT=3000
-DB_URL=mongodb://mongo:27017/reviewdb
+DB_URL=mongodb://root:8gx89ljj@comdb-mongodb.ns-dc2goees.svc:27017/reviewdb
 EOF
 echo "后端环境配置完成"
 
@@ -70,7 +70,7 @@ cd "$PWD/server" || exit
 log "检查数据库连接..."
 node -e "
 const mongoose = require('mongoose');
-const uri = process.env.DB_URL || 'mongodb://mongo:27017/reviewdb';
+const uri = process.env.DB_URL || 'mongodb://root:8gx89ljj@comdb-mongodb.ns-dc2goees.svc:27017/reviewdb';
 mongoose.connect(uri).then(() => {
   console.log('数据库连接成功');
   process.exit(0);
@@ -85,7 +85,7 @@ if [ \$? -ne 0 ]; then
   sleep 10
   node -e "
   const mongoose = require('mongoose');
-  const uri = process.env.DB_URL || 'mongodb://mongo:27017/reviewdb';
+  const uri = process.env.DB_URL || 'mongodb://root:8gx89ljj@comdb-mongodb.ns-dc2goees.svc:27017/reviewdb';
   mongoose.connect(uri).then(() => {
     console.log('数据库连接成功');
     process.exit(0);
