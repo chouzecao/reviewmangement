@@ -68,6 +68,15 @@ mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 })
   });
 "
 
+# 修改服务器配置，确保监听在0.0.0.0
+log "检查并确保后端服务监听在所有网络接口(0.0.0.0)..."
+if [ -f "src/app.js" ]; then
+    # 确保app.js中的监听地址是0.0.0.0
+    grep -q "app.listen.*'0.0.0.0'" src/app.js || {
+        log_error "警告: 后端服务可能没有监听在所有接口上，可能导致网络连接问题"
+    }
+fi
+
 # 在后台启动后端服务
 log "启动后端服务..."
 node src/app.js &
@@ -78,9 +87,21 @@ log "后端服务进程ID: ${BACKEND_PID}"
 log "等待后端服务启动 (5秒)..."
 sleep 5
 
-# 检查后端服务是否正常运行
+# 验证后端服务是否正常运行
 if kill -0 $BACKEND_PID 2>/dev/null; then
     log "后端服务启动成功"
+    # 验证端口是否正在监听
+    if command -v netstat > /dev/null; then
+        log "检查端口状态:"
+        netstat -tulpn 2>/dev/null | grep "LISTEN" | grep ":${PORT}" | while read line; do 
+            log "  $line"
+        done
+    elif command -v ss > /dev/null; then
+        log "检查端口状态:"
+        ss -tulpn 2>/dev/null | grep "LISTEN" | grep ":${PORT}" | while read line; do 
+            log "  $line"
+        done
+    fi
 else
     log_error "后端服务启动失败"
     exit 1
@@ -97,7 +118,9 @@ log "当前目录: $(pwd)"
 
 # 设置前端服务配置
 export SERVE_OPTIONS="--symlinks --no-clipboard --single"
-BACKEND_API="http://localhost:${PORT}"
+
+# 明确使用0.0.0.0而不是localhost来确保网络访问
+BACKEND_API="http://127.0.0.1:${PORT}"
 log "前端服务配置:"
 log "  API地址: ${BACKEND_API}"
 log "  服务选项: ${SERVE_OPTIONS}"
@@ -105,7 +128,7 @@ log "  服务选项: ${SERVE_OPTIONS}"
 # 创建并验证serve.json配置
 log "创建serve.json配置文件..."
 mkdir -p dist
-cat > dist/serve.json << EOF
+cat > dist/serve.json << EOFINNER
 {
   "rewrites": [
     { "source": "/api/:path*", "destination": "${BACKEND_API}/api/:path*" },
@@ -129,9 +152,20 @@ cat > dist/serve.json << EOF
     }
   ]
 }
-EOF
+EOFINNER
 
-log "serve.json 配置文件已创建"
+log "serve.json 配置文件内容:"
+cat dist/serve.json
+
+# 添加测试连接后端
+log "测试后端API连接..."
+if command -v curl > /dev/null; then
+    curl -s -o /dev/null -w "API连接测试结果: %{http_code}\n" "${BACKEND_API}/api/health" || log_error "无法连接到后端API"
+elif command -v wget > /dev/null; then
+    wget -q -O /dev/null "${BACKEND_API}/api/health" && log "API连接测试成功" || log_error "无法连接到后端API"
+else
+    log "无法测试API连接 (缺少curl或wget)"
+fi
 
 # 启动前端服务
 log "启动前端服务..."
