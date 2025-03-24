@@ -232,11 +232,9 @@ if [ "$API_AVAILABLE" = "false" ]; then
     
     log "将使用直接代理配置"
     # 使用简单的转发配置
-    cat > dist/serve.json << EOFINNER
+    cat > serve.json << EOFINNER
 {
-  "public": "dist",
   "rewrites": [
-    { "source": "/api", "destination": "http://127.0.0.1:${PORT}/api" },
     { "source": "/api/**", "destination": "http://127.0.0.1:${PORT}/api/**" },
     { "source": "/uploads/**", "destination": "http://127.0.0.1:${PORT}/uploads/**" }
   ],
@@ -256,11 +254,9 @@ else
     API_HOST=$(echo "$API_ENDPOINT" | sed 's|http://\([^:]*\):.*|\1|')
     log "使用已验证的API主机: $API_HOST"
     
-    cat > dist/serve.json << EOFINNER
+    cat > serve.json << EOFINNER
 {
-  "public": "dist",
   "rewrites": [
-    { "source": "/api", "destination": "http://${API_HOST}:${PORT}/api" },
     { "source": "/api/**", "destination": "http://${API_HOST}:${PORT}/api/**" },
     { "source": "/uploads/**", "destination": "http://${API_HOST}:${PORT}/uploads/**" }
   ],
@@ -278,7 +274,7 @@ EOFINNER
 fi
 
 log "serve.json 配置文件内容:"
-cat dist/serve.json
+cat serve.json
 
 # 测试绝对路径URL是否可访问
 if command -v curl > /dev/null; then
@@ -290,7 +286,7 @@ fi
 
 # 启动前端服务
 log "启动前端服务..."
-npx serve -s dist -l ${FRONTEND_PORT:-8080} --cors --config ./dist/serve.json ${SERVE_OPTIONS} --debug > frontend.log 2>&1 &
+npx serve -s dist -l ${FRONTEND_PORT:-8080} --cors --config ./serve.json ${SERVE_OPTIONS} --debug > frontend.log 2>&1 &
 FRONTEND_PID=$!
 log "前端服务进程ID: ${FRONTEND_PID}"
 
@@ -321,7 +317,7 @@ else
     log_error "前端服务进程已退出"
     log_error "查看错误日志:"
     cat frontend.log
-    kill -15 $BACKEND_PID
+    kill -15 $BACKEND_PID 2>/dev/null || true
     exit 1
 fi
 
