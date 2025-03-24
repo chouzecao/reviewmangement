@@ -14,7 +14,7 @@ echo "后端依赖安装完成"
 # 创建生产环境配置文件
 cat <<EOF > .env.production
 SERVER_PORT=3000
-DB_URL=mongodb://root:8gx89ljj@comdb-mongodb.ns-dc2goees.svc:27017/reviewdb
+MONGODB_URI=mongodb://root:8gx89ljj@comdb-mongodb.ns-dc2goees.svc:27017/reviewdb?authSource=admin
 EOF
 echo "后端环境配置完成"
 
@@ -70,36 +70,21 @@ cd "$PWD/server" || exit
 log "检查数据库连接..."
 node -e "
 const mongoose = require('mongoose');
-const uri = process.env.DB_URL || 'mongodb://root:8gx89ljj@comdb-mongodb.ns-dc2goees.svc:27017/reviewdb';
-mongoose.connect(uri).then(() => {
-  console.log('数据库连接成功');
-  process.exit(0);
-}).catch(err => {
-  console.error('数据库连接失败:', err);
-  process.exit(1);
-});
-"
-
-if [ \$? -ne 0 ]; then
-  log "数据库连接失败，等待10秒后重试..."
-  sleep 10
-  node -e "
-  const mongoose = require('mongoose');
-  const uri = process.env.DB_URL || 'mongodb://root:8gx89ljj@comdb-mongodb.ns-dc2goees.svc:27017/reviewdb';
-  mongoose.connect(uri).then(() => {
-    console.log('数据库连接成功');
+const uri = process.env.MONGODB_URI || process.env.DB_URL || require('./src/config/config').db.uri;
+console.log('[' + new Date().toISOString() + '] 尝试连接数据库: ' + uri.replace(/\/\/[^:]+:[^@]+@/, '//***:***@'));
+mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 })
+  .then(() => {
+    console.log('[' + new Date().toISOString() + '] 数据库连接正常');
     process.exit(0);
-  }).catch(err => {
-    console.error('数据库连接失败:', err);
+  })
+  .catch((err) => {
+    console.error('[' + new Date().toISOString() + '] 数据库连接失败:', err);
     process.exit(1);
   });
-  "
-  
-  if [ \$? -ne 0 ]; then
-    log "数据库连接失败，退出服务"
+" || {
+    log "数据库连接检查失败"
     exit 1
-  fi
-fi
+}
 
 # 启动后端服务
 log "正在启动后端服务..."
