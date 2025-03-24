@@ -26,8 +26,6 @@ log "后端端口: ${PORT}"
 log "前端端口: ${FRONTEND_PORT:-8080}"
 log "MongoDB URI: ${MONGODB_URI:-使用默认配置}"
 log "工作目录: $(pwd)"
-log "系统内存信息:"
-free -h | while read line; do log "  $line"; done
 log "======================="
 
 # 启动后端服务
@@ -37,23 +35,24 @@ cd /home/devbox/project/server || {
     exit 1
 }
 log "当前目录: $(pwd)"
-  
-# 创建上传目录（如果不存在）
-if [ ! -d "uploads" ]; then
-  log "创建上传目录..."
-  mkdir -p uploads
-  log "上传目录创建完成: $(pwd)/uploads"
-fi
 
-# 尝试设置上传目录权限，但忽略错误
-log "设置上传目录权限..."
-if chmod 755 uploads 2>/dev/null; then
-    log "上传目录权限设置成功"
+# 检查上传目录
+if [ -d "uploads" ]; then
+    log "上传目录已存在: $(pwd)/uploads"
+    # 检查目录是否可写
+    if [ -w "uploads" ]; then
+        log "上传目录权限正常（可写）"
+    else
+        log "上传目录为只读（使用持久卷时这是正常的）"
+    fi
 else
-    log_error "上传目录权限设置失败（这可能是正常的，如果使用持久卷）"
+    log "创建上传目录..."
+    mkdir -p uploads 2>/dev/null || {
+        log_error "无法创建上传目录，将使用已存在的目录"
+    }
 fi
 
-# 启动前检查数据库连接
+# 检查数据库连接
 log "检查数据库连接..."
 node -e "
 const mongoose = require('mongoose');
@@ -93,17 +92,15 @@ cd /home/devbox/project/client || {
     exit 1
 }
 log "当前目录: $(pwd)"
-echo "启动前端服务..."
 
-# 设置低内存消耗模式
+# 设置前端服务配置
 export SERVE_OPTIONS="--symlinks --no-clipboard --single"
-
-# 更新serve.json配置
-log "更新API代理配置..."
 BACKEND_API="http://localhost:${PORT}"
-log "API指向: ${BACKEND_API}"
+log "前端服务配置:"
+log "  API地址: ${BACKEND_API}"
+log "  服务选项: ${SERVE_OPTIONS}"
 
-# 创建serve.json文件
+# 创建并验证serve.json配置
 log "创建serve.json配置文件..."
 mkdir -p dist
 cat > dist/serve.json << EOF
@@ -132,11 +129,10 @@ cat > dist/serve.json << EOF
 }
 EOF
 
-log "serve.json 配置文件已创建:"
-cat dist/serve.json
+log "serve.json 配置文件已创建"
 
-echo "启动前端服务，监听端口: ${FRONTEND_PORT:-8080}"
-# 在后台启动前端服务
+# 启动前端服务
+log "启动前端服务..."
 npx serve -s dist -l ${FRONTEND_PORT:-8080} --cors --config ./dist/serve.json ${SERVE_OPTIONS} &
 FRONTEND_PID=$!
 log "前端服务进程ID: ${FRONTEND_PID}"
