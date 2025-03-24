@@ -26,6 +26,8 @@ log "后端端口: ${PORT}"
 log "前端端口: ${FRONTEND_PORT:-8080}"
 log "MongoDB URI: ${MONGODB_URI:-使用默认配置}"
 log "工作目录: $(pwd)"
+log "系统内存信息:"
+free -h | while read line; do log "  $line"; done
 log "======================="
 
 # 启动后端服务
