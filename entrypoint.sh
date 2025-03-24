@@ -317,7 +317,7 @@ else
     log_error "前端服务进程已退出"
     log_error "查看错误日志:"
     cat frontend.log
-    kill -15 $BACKEND_PID 2>/dev/null || true
+    kill -15 $BACKEND_PID
     exit 1
 fi
 

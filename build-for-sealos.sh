@@ -49,12 +49,12 @@ rm -rf node_modules/.vite
 # 构建前端 - 增加内存限制
 NODE_ENV=production NODE_OPTIONS="--max-old-space-size=4096" npm run build
 
-# 确保serve.json文件存在且内容正确
+# 创建客户端serve.json
 cat > serve.json << 'EOF'
 {
   "rewrites": [
-    { "source": "/api/:path*", "destination": "${API_URL:-http://localhost:3000}/api/:path*" },
-    { "source": "/uploads/:path*", "destination": "${API_URL:-http://localhost:3000}/uploads/:path*" }
+    { "source": "/api/**", "destination": "http://127.0.0.1:3000/api/**" },
+    { "source": "/uploads/**", "destination": "http://127.0.0.1:3000/uploads/**" }
   ],
   "headers": [
     {
@@ -76,8 +76,32 @@ cat > serve.json << 'EOF'
 }
 EOF
 
-# 复制serve.json到dist目录
-cp serve.json dist/
+# 创建dist目录下的serve.json
+cat > dist/serve.json << 'EOF'
+{
+  "rewrites": [
+    { "source": "/api/**", "destination": "http://127.0.0.1:3000/api/**" },
+    { "source": "/uploads/**", "destination": "http://127.0.0.1:3000/uploads/**" }
+  ],
+  "headers": [
+    {
+      "source": "**/*",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+        { "key": "Access-Control-Allow-Origin", "value": "*" }
+      ]
+    },
+    {
+      "source": "/api/**",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, PUT, DELETE, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Origin, X-Requested-With, Content-Type, Accept, Authorization" }
+      ]
+    }
+  ]
+}
+EOF
 
 echo "===== 前端构建完成 ====="
 
@@ -452,36 +476,6 @@ kill -15 $MONITOR_PID 2>/dev/null || true
 log "应用退出"
 exit 1
 EOF
-
-# 创建客户端serve.json的初始模板（部署时将由entrypoint.sh动态更新）
-cd /home/devbox/project/client
-cat > serve.json << 'EOF'
-{
-  "rewrites": [
-    { "source": "/api/**", "destination": "http://127.0.0.1:3000/api/**" },
-    { "source": "/uploads/**", "destination": "http://127.0.0.1:3000/uploads/**" }
-  ],
-  "headers": [
-    {
-      "source": "**/*",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
-        { "key": "Access-Control-Allow-Origin", "value": "*" }
-      ]
-    },
-    {
-      "source": "/api/**",
-      "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, PUT, DELETE, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Origin, X-Requested-With, Content-Type, Accept, Authorization" }
-      ]
-    }
-  ]
-}
-EOF
-
-cd /home/devbox/project
 
 # 给 entrypoint.sh 添加执行权限
 chmod +x entrypoint.sh
