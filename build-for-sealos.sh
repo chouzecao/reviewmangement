@@ -55,61 +55,153 @@ if ! grep -q "http-server" package.json; then
   npm install --save-dev http-server
 fi
 
-# 创建客户端serve.json
-cat > serve.json << 'EOF'
-{
-  "rewrites": [
-    { "source": "/api/**", "destination": "http://127.0.0.1:3000/api/**" },
-    { "source": "/uploads/**", "destination": "http://127.0.0.1:3000/uploads/**" }
-  ],
-  "headers": [
-    {
-      "source": "**/*",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
-        { "key": "Access-Control-Allow-Origin", "value": "*" }
-      ]
-    },
-    {
-      "source": "/api/**",
-      "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, PUT, DELETE, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Origin, X-Requested-With, Content-Type, Accept, Authorization" }
-      ]
-    }
-  ]
-}
-EOF
-
-# 创建dist目录下的serve.json
-cat > dist/serve.json << 'EOF'
-{
-  "rewrites": [
-    { "source": "/api/**", "destination": "http://127.0.0.1:3000/api/**" },
-    { "source": "/uploads/**", "destination": "http://127.0.0.1:3000/uploads/**" }
-  ],
-  "headers": [
-    {
-      "source": "**/*",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
-        { "key": "Access-Control-Allow-Origin", "value": "*" }
-      ]
-    },
-    {
-      "source": "/api/**",
-      "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, PUT, DELETE, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Origin, X-Requested-With, Content-Type, Accept, Authorization" }
-      ]
-    }
-  ]
-}
-EOF
-
 echo "===== 前端构建完成 ====="
+
+# 更新entrypoint.sh脚本
+echo "===== 更新启动脚本 ====="
+cd /home/devbox/project
+
+cat > entrypoint.sh << 'EOF'
+#!/bin/bash
+
+# 日志输出函数
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+}
+
+# 错误日志输出函数
+log_error() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [错误] $1" >&2
+}
+
+# 设置环境变量
+export NODE_ENV=production
+export PORT=${PORT:-3000}
+# 设置TMPDIR环境变量解决文件系统跨设备链接问题
+export TMPDIR=/tmp
+# 设置内存限制以优化性能
+export NODE_OPTIONS="--max-old-space-size=${NODE_MEMORY:-512}"
+
+# 打印运行环境信息
+log "======= 应用启动 ======="
+log "运行模式: ${NODE_ENV}"
+log "内存限制: ${NODE_OPTIONS}"
+log "后端端口: ${PORT}"
+log "前端端口: ${FRONTEND_PORT:-8080}"
+log "MongoDB URI: ${MONGODB_URI:-使用默认配置}"
+log "工作目录: $(pwd)"
+log "系统内存信息:"
+free -h | while read line; do log "  $line"; done
+log "======================="
+
+# 检查网络配置
+log "检查网络配置..."
+log "主机名: $(hostname)"
+log "网络接口:"
+ip addr show | grep -E "inet " | while read line; do log "  $line"; done
+
+# 启动后端服务
+log "切换到后端目录..."
+cd /home/devbox/project/server || {
+    log_error "切换到后端目录失败"
+    exit 1
+}
+log "当前目录: $(pwd)"
+
+# 检查上传目录
+if [ -d "uploads" ]; then
+    log "上传目录已存在: $(pwd)/uploads"
+    # 检查目录是否可写
+    if [ -w "uploads" ]; then
+        log "上传目录权限正常（可写）"
+    else
+        log "上传目录为只读（使用持久卷时这是正常的）"
+    fi
+else
+    log "创建上传目录..."
+    mkdir -p uploads 2>/dev/null || {
+        log_error "无法创建上传目录，将使用已存在的目录"
+    }
+fi
+
+# 检查数据库连接
+log "检查数据库连接..."
+node -e "
+const mongoose = require('mongoose');
+const uri = process.env.MONGODB_URI || require('./src/config/config').db.uri;
+console.log('[' + new Date().toISOString() + '] 尝试连接数据库: ' + uri.replace(/\/\/[^:]+:[^@]+@/, '//***:***@'));
+mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 })
+  .then(() => console.log('[' + new Date().toISOString() + '] 数据库连接正常'))
+  .catch((err) => {
+    console.error('[' + new Date().toISOString() + '] 数据库连接失败:', err);
+    process.exit(1);
+  });
+"
+
+# 添加健康检查路由（如果不存在）
+log "确保健康检查端点存在..."
+if [ -f "src/app.js" ]; then
+    if ! grep -q "app.get('/api/health'" src/app.js && grep -q "app.get('/health'" src/app.js; then
+        log "将/health路由修改为/api/health用于健康检查"
+        # 创建临时文件修改健康检查路由
+        TEMP_FILE=$(mktemp)
+        sed 's|app.get..'/health'|app.get(\'/api/health\'|g' src/app.js > $TEMP_FILE
+        cat $TEMP_FILE > src/app.js
+        rm $TEMP_FILE
+        log "健康检查路由修改完成"
+    elif ! grep -q "app.get('/api/health'" src/app.js && ! grep -q "app.get('/health'" src/app.js; then
+        log "添加/api/health路由用于健康检查"
+        # 创建临时文件添加健康检查路由
+        TEMP_FILE=$(mktemp)
+        awk '/app.use/ && !health_added {print "// 添加健康检查路由\napp.get(\"/api/health\", (req, res) => { res.status(200).json({ status: \"ok\", time: new Date().toISOString() }); });\n"; health_added=1} {print}' src/app.js > $TEMP_FILE
+        cat $TEMP_FILE > src/app.js
+        rm $TEMP_FILE
+        log "健康检查路由添加完成"
+    else
+        log "健康检查路由已存在"
+    fi
+fi
+
+# 在后台启动后端服务
+log "启动后端服务..."
+node src/app.js > server.log 2>&1 &
+BACKEND_PID=$!
+log "后端服务进程ID: ${BACKEND_PID}"
+
+# 等待后端服务启动
+log "等待后端服务启动 (15秒)..."
+for i in {1..15}; do
+    log "等待后端服务启动: $i 秒"
+    sleep 1
+    if grep -q "服务器运行在端口" server.log; then
+        log "后端服务已启动，监听端口信息:"
+        grep "服务器运行在端口" server.log | while read line; do log "  $line"; done
+        break
+    fi
+done
+
+# 显示后端日志
+log "后端服务启动日志 (最近20行):"
+tail -n 20 server.log | while read line; do log "  $line"; done
+
+# 验证后端服务是否正常运行
+if kill -0 $BACKEND_PID 2>/dev/null; then
+    log "后端服务进程运行正常"
+else
+    log_error "后端服务进程已退出"
+    log_error "查看错误日志:"
+    cat server.log
+    exit 1
+fi
+
+# 启动前端服务
+log "切换到前端目录..."
+cd /home/devbox/project/client || {
+    log_error "切换到前端目录失败"
+    kill -15 $BACKEND_PID
+    exit 1
+}
+log "当前目录: $(pwd)"
 
 # 安装http-server（如果需要）
 if ! command -v http-server > /dev/null; then
@@ -134,22 +226,11 @@ tail -n 20 frontend.log | while read line; do log "  $line"; done
 # 验证前端服务是否正常运行
 if kill -0 $FRONTEND_PID 2>/dev/null; then
     log "前端服务进程运行正常"
-    
-    # 验证端口是否正在监听
-    if command -v lsof > /dev/null; then
-        log "检查前端端口状态 (lsof):"
-        lsof -i :${FRONTEND_PORT:-8080} | while read line; do log "  $line"; done
-    elif command -v netstat > /dev/null; then
-        log "检查前端端口状态 (netstat):"
-        netstat -tulpn 2>/dev/null | grep "LISTEN" | grep ":${FRONTEND_PORT:-8080}" | while read line; do log "  $line"; done
-    elif command -v ss > /dev/null; then
-        log "检查前端端口状态 (ss):"
-        ss -tulpn 2>/dev/null | grep "LISTEN" | grep ":${FRONTEND_PORT:-8080}" | while read line; do log "  $line"; done
-    fi
 else
     log_error "前端服务进程已退出"
     log_error "查看错误日志:"
     cat frontend.log
+    kill -15 $BACKEND_PID
     exit 1
 fi
 
