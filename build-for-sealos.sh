@@ -74,6 +74,11 @@ log_error() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [错误] $1" >&2
 }
 
+# 调试日志
+log_debug() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [调试] $1" >&2
+}
+
 # 设置环境变量
 export NODE_ENV=production
 export PORT=${PORT:-3000}
@@ -99,6 +104,17 @@ log "检查网络配置..."
 log "主机名: $(hostname)"
 log "网络接口:"
 ip addr show | grep -E "inet " | while read line; do log "  $line"; done
+
+# DNS 解析检查
+log "检查DNS解析..."
+if command -v dig > /dev/null || command -v nslookup > /dev/null; then
+    if command -v dig > /dev/null; then
+        dig +short localhost
+        log "localhost DNS解析: $(dig +short localhost)"
+    elif command -v nslookup > /dev/null; then
+        log "localhost DNS解析: $(nslookup localhost | grep Address | tail -n1)"
+    fi
+fi
 
 # 启动后端服务
 log "切换到后端目录..."
@@ -137,6 +153,14 @@ mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 })
     process.exit(1);
   });
 "
+
+# 检查后端配置文件
+log "检查app.js文件..."
+if [ -f "src/app.js" ]; then
+    # 显示app.listen部分
+    log "后端服务监听配置:"
+    grep -A 3 "app.listen" src/app.js | while read line; do log "  $line"; done
+fi
 
 # 添加健康检查路由（如果不存在）
 log "确保健康检查端点存在..."
@@ -187,6 +211,28 @@ tail -n 20 server.log | while read line; do log "  $line"; done
 # 验证后端服务是否正常运行
 if kill -0 $BACKEND_PID 2>/dev/null; then
     log "后端服务进程运行正常"
+    
+    # 验证端口是否正在监听
+    PORTS_LISTENING=false
+    if command -v lsof > /dev/null; then
+        log "检查端口状态 (lsof):"
+        lsof -i :${PORT} | while read line; do log "  $line"; done
+        lsof -i :${PORT} | grep -q LISTEN && PORTS_LISTENING=true
+    elif command -v netstat > /dev/null; then
+        log "检查端口状态 (netstat):"
+        netstat -tulpn 2>/dev/null | grep "LISTEN" | grep ":${PORT}" | while read line; do log "  $line"; done
+        netstat -tulpn 2>/dev/null | grep "LISTEN" | grep ":${PORT}" | grep -q "." && PORTS_LISTENING=true
+    elif command -v ss > /dev/null; then
+        log "检查端口状态 (ss):"
+        ss -tulpn 2>/dev/null | grep "LISTEN" | grep ":${PORT}" | while read line; do log "  $line"; done
+        ss -tulpn 2>/dev/null | grep "LISTEN" | grep ":${PORT}" | grep -q "." && PORTS_LISTENING=true
+    fi
+    
+    if [ "$PORTS_LISTENING" = "true" ]; then
+        log "后端服务正在监听端口 ${PORT}"
+    else
+        log_error "警告：未检测到后端服务监听端口 ${PORT}"
+    fi
 else
     log_error "后端服务进程已退出"
     log_error "查看错误日志:"
@@ -226,6 +272,18 @@ tail -n 20 frontend.log | while read line; do log "  $line"; done
 # 验证前端服务是否正常运行
 if kill -0 $FRONTEND_PID 2>/dev/null; then
     log "前端服务进程运行正常"
+    
+    # 验证端口是否正在监听
+    if command -v lsof > /dev/null; then
+        log "检查前端端口状态 (lsof):"
+        lsof -i :${FRONTEND_PORT:-8080} | while read line; do log "  $line"; done
+    elif command -v netstat > /dev/null; then
+        log "检查前端端口状态 (netstat):"
+        netstat -tulpn 2>/dev/null | grep "LISTEN" | grep ":${FRONTEND_PORT:-8080}" | while read line; do log "  $line"; done
+    elif command -v ss > /dev/null; then
+        log "检查前端端口状态 (ss):"
+        ss -tulpn 2>/dev/null | grep "LISTEN" | grep ":${FRONTEND_PORT:-8080}" | while read line; do log "  $line"; done
+    fi
 else
     log_error "前端服务进程已退出"
     log_error "查看错误日志:"
