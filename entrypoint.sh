@@ -50,32 +50,40 @@ else
   # 更新serve.json配置
   echo "更新API代理配置..."
   BACKEND_API=${API_URL:-http://localhost:3000}
-  echo "{
-  \"rewrites\": [
-    { \"source\": \"/api/:path*\", \"destination\": \"${BACKEND_API}/api/:path*\" },
-    { \"source\": \"/uploads/:path*\", \"destination\": \"${BACKEND_API}/uploads/:path*\" }
+  echo "API指向: ${BACKEND_API}"
+  
+  # 创建serve.json文件
+  cat > dist/serve.json << EOF
+{
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "${BACKEND_API}/api/:path*" },
+    { "source": "/uploads/:path*", "destination": "${BACKEND_API}/uploads/:path*" }
   ],
-  \"headers\": [
+  "headers": [
     {
-      \"source\": \"**/*\",
-      \"headers\": [
-        { \"key\": \"Cache-Control\", \"value\": \"no-cache, no-store, must-revalidate\" },
-        { \"key\": \"Access-Control-Allow-Origin\", \"value\": \"*\" }
+      "source": "**/*",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+        { "key": "Access-Control-Allow-Origin", "value": "*" }
       ]
     },
     {
-      \"source\": \"/api/**\",
-      \"headers\": [
-        { \"key\": \"Access-Control-Allow-Origin\", \"value\": \"*\" },
-        { \"key\": \"Access-Control-Allow-Methods\", \"value\": \"GET, POST, PUT, DELETE, OPTIONS\" },
-        { \"key\": \"Access-Control-Allow-Headers\", \"value\": \"Origin, X-Requested-With, Content-Type, Accept, Authorization\" }
+      "source": "/api/**",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, PUT, DELETE, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Origin, X-Requested-With, Content-Type, Accept, Authorization" }
       ]
     }
   ]
-}" > dist/serve.json
+}
+EOF
   
-  echo "配置文件已更新，API指向: ${BACKEND_API}"
+  # 验证配置文件
+  echo "serve.json 配置文件内容:"
+  cat dist/serve.json
   
+  echo "启动前端服务，监听端口: ${FRONTEND_PORT:-8080}"
   # 使用serve的代理功能指向后端API
   npx serve -s dist -l ${FRONTEND_PORT:-8080} --cors --config ./dist/serve.json ${SERVE_OPTIONS}
 fi
