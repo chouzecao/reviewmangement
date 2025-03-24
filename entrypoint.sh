@@ -8,10 +8,6 @@ export TMPDIR=/tmp
 # 设置内存限制以优化性能
 export NODE_OPTIONS="--max-old-space-size=${NODE_MEMORY:-512}"
 
-# 创建上传目录
-mkdir -p /home/devbox/project/server/uploads
-chmod -R 777 /home/devbox/project/server/uploads
-
 # 打印运行环境信息
 echo "======= 应用启动 ======="
 echo "运行模式: ${NODE_ENV}"
@@ -23,6 +19,16 @@ echo "======================="
 if [ "${RUN_BACKEND:-true}" = "true" ]; then
   # 启动后端服务
   cd /home/devbox/project/server
+  
+  # 创建上传目录（如果不存在）
+  if [ ! -d "uploads" ]; then
+    echo "创建上传目录..."
+    mkdir -p uploads
+  fi
+
+  # 尝试设置上传目录权限，但忽略错误
+  echo "设置上传目录权限..."
+  chmod 755 uploads 2>/dev/null || true
   
   # 启动前检查数据库连接
   echo "检查数据库连接..."
