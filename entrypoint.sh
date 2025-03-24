@@ -68,6 +68,10 @@ mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 })
   });
 "
 
+# 检查网络情况
+log "检查网络配置..."
+ip addr show | grep -E "inet " | while read line; do log "  $line"; done
+
 # 修改服务器配置，确保监听在0.0.0.0
 log "检查并确保后端服务监听在所有网络接口(0.0.0.0)..."
 if [ -f "src/app.js" ]; then
@@ -84,8 +88,8 @@ BACKEND_PID=$!
 log "后端服务进程ID: ${BACKEND_PID}"
 
 # 等待后端服务启动
-log "等待后端服务启动 (5秒)..."
-sleep 5
+log "等待后端服务启动 (10秒)..."
+sleep 10
 
 # 验证后端服务是否正常运行
 if kill -0 $BACKEND_PID 2>/dev/null; then
@@ -118,12 +122,59 @@ log "当前目录: $(pwd)"
 
 # 设置前端服务配置
 export SERVE_OPTIONS="--symlinks --no-clipboard --single"
+log "前端服务选项: ${SERVE_OPTIONS}"
 
-# 明确使用0.0.0.0而不是localhost来确保网络访问
+# 尝试不同的后端地址选项
+log "测试不同的API连接方式..."
+CONNECTION_OK=false
+
+# 选项1: 检查127.0.0.1
 BACKEND_API="http://127.0.0.1:${PORT}"
-log "前端服务配置:"
-log "  API地址: ${BACKEND_API}"
-log "  服务选项: ${SERVE_OPTIONS}"
+log "尝试连接后端: ${BACKEND_API}"
+if command -v curl > /dev/null; then
+    if curl -s -o /dev/null -w "%{http_code}\n" "${BACKEND_API}/api/health" | grep -q "200"; then
+        log "API连接成功 (127.0.0.1)"
+        CONNECTION_OK=true
+    else
+        log_error "无法连接到后端API (127.0.0.1)"
+    fi
+fi
+
+# 选项2: 如果选项1失败，尝试使用localhost
+if [ "$CONNECTION_OK" = "false" ]; then
+    BACKEND_API="http://localhost:${PORT}"
+    log "尝试连接后端: ${BACKEND_API}"
+    if command -v curl > /dev/null; then
+        if curl -s -o /dev/null -w "%{http_code}\n" "${BACKEND_API}/api/health" | grep -q "200"; then
+            log "API连接成功 (localhost)"
+            CONNECTION_OK=true
+        else
+            log_error "无法连接到后端API (localhost)"
+        fi
+    fi
+fi
+
+# 选项3: 如果前两个选项都失败，尝试使用0.0.0.0
+if [ "$CONNECTION_OK" = "false" ]; then
+    BACKEND_API="http://0.0.0.0:${PORT}"
+    log "尝试连接后端: ${BACKEND_API}"
+    if command -v curl > /dev/null; then
+        if curl -s -o /dev/null -w "%{http_code}\n" "${BACKEND_API}/api/health" | grep -q "200"; then
+            log "API连接成功 (0.0.0.0)"
+            CONNECTION_OK=true
+        else
+            log_error "无法连接到后端API (0.0.0.0)"
+        fi
+    fi
+fi
+
+# 如果所有选项都失败，记录警告但继续尝试
+if [ "$CONNECTION_OK" = "false" ]; then
+    log_error "警告: 所有API连接测试都失败。将使用127.0.0.1作为后备选项"
+    BACKEND_API="http://127.0.0.1:${PORT}"
+fi
+
+log "使用的后端API地址: ${BACKEND_API}"
 
 # 创建并验证serve.json配置
 log "创建serve.json配置文件..."
@@ -131,8 +182,8 @@ mkdir -p dist
 cat > dist/serve.json << EOFINNER
 {
   "rewrites": [
-    { "source": "/api/:path*", "destination": "${BACKEND_API}/api/:path*" },
-    { "source": "/uploads/:path*", "destination": "${BACKEND_API}/uploads/:path*" }
+    { "source": "/api/*", "destination": "${BACKEND_API}/api/:splat" },
+    { "source": "/uploads/*", "destination": "${BACKEND_API}/uploads/:splat" }
   ],
   "headers": [
     {
@@ -157,19 +208,9 @@ EOFINNER
 log "serve.json 配置文件内容:"
 cat dist/serve.json
 
-# 添加测试连接后端
-log "测试后端API连接..."
-if command -v curl > /dev/null; then
-    curl -s -o /dev/null -w "API连接测试结果: %{http_code}\n" "${BACKEND_API}/api/health" || log_error "无法连接到后端API"
-elif command -v wget > /dev/null; then
-    wget -q -O /dev/null "${BACKEND_API}/api/health" && log "API连接测试成功" || log_error "无法连接到后端API"
-else
-    log "无法测试API连接 (缺少curl或wget)"
-fi
-
 # 启动前端服务
 log "启动前端服务..."
-npx serve -s dist -l ${FRONTEND_PORT:-8080} --cors --config ./dist/serve.json ${SERVE_OPTIONS} &
+npx serve -s dist -l ${FRONTEND_PORT:-8080} --cors --config ./dist/serve.json ${SERVE_OPTIONS} --debug &
 FRONTEND_PID=$!
 log "前端服务进程ID: ${FRONTEND_PID}"
 
