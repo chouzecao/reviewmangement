@@ -60,11 +60,11 @@ log() {
 
 # 设置环境变量
 export TMPDIR=/tmp
-cd "$PWD" || exit
+cd "/home/devbox/project" || exit
 
 # 启动后端服务
 log "启动后端服务..."
-cd "$PWD/server" || exit
+cd "/home/devbox/project/server" || exit
 
 # 先检查能否连接到数据库
 log "检查数据库连接..."
@@ -118,7 +118,7 @@ for i in {1..10}; do
 done
 
 # 启动前端代理服务
-cd "$PWD/../client" || exit
+cd "/home/devbox/project/client" || exit
 log "启动前端代理服务..."
 nohup node proxy-server/server.js > frontend.log 2>&1 &
 FRONTEND_PID=\$!

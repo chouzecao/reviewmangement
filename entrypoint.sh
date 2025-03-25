@@ -65,7 +65,7 @@ for i in {1..10}; do
 done
 
 # 启动前端代理服务
-cd "/home/devbox/project/../client" || exit
+cd "/home/devbox/project/client" || exit
 log "启动前端代理服务..."
 nohup node proxy-server/server.js > frontend.log 2>&1 &
 FRONTEND_PID=$!
