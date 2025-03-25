@@ -35,9 +35,9 @@ mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 })
 
 # 启动后端服务
 log "正在启动后端服务..."
-nohup node app.js > backend.log 2>&1 &
+nohup node src/app.js > backend.log 2>&1 &
 BACKEND_PID=$!
-log "后端服务已启动，PID: $BACKEND_PID"
+log "后端服务已启动，PID: ${BACKEND_PID}"
 
 # 验证后端服务是否正常启动
 sleep 5
