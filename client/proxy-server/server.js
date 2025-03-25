@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 
 // 配置
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.FRONTEND_PORT || 8080;
 const API_URL = process.env.API_URL || 'http://localhost:3000';
 const STATIC_DIR = path.resolve(__dirname, '../dist');
 

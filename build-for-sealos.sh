@@ -120,6 +120,7 @@ done
 # 启动前端代理服务
 cd "/home/devbox/project/client" || exit
 log "启动前端代理服务..."
+export FRONTEND_PORT=8080
 nohup node proxy-server/server.js > frontend.log 2>&1 &
 FRONTEND_PID=\$!
 log "前端代理服务已启动，PID: \$FRONTEND_PID"
