@@ -6,7 +6,53 @@ const ExcelJS = require('exceljs')
  */
 exports.generateReport = async (req, res) => {
   try {
+    // 先检查数据库中是否有任何记录
+    const totalRecordsCount = await Review.countDocuments({});
+    console.log(`数据库中总共有 ${totalRecordsCount} 条记录`);
+    
+    // 列出所有可用的项目
+    const availableProjects = await Review.distinct('project');
+    console.log('数据库中所有可用的项目:', availableProjects);
+    
+    // 记录数据库中的日期范围
+    const dateRange = await Review.aggregate([
+      {
+        $group: {
+          _id: null,
+          minDate: { $min: "$orderDate" },
+          maxDate: { $max: "$orderDate" }
+        }
+      }
+    ]);
+    
+    if (dateRange.length > 0) {
+      console.log('数据库中的日期范围:', {
+        最早日期: dateRange[0].minDate,
+        最晚日期: dateRange[0].maxDate
+      });
+    }
+    
     const { project, startDate, endDate } = req.body
+    
+    // 记录认证信息
+    console.log('Auth header:', req.headers.authorization)
+    console.log('Cookie:', req.headers.cookie)
+    console.log('User info:', req.user || 'No user info')
+    
+    // 详细记录请求参数
+    console.log('请求参数:', {
+      body: req.body,
+      query: req.query,
+      projectType: typeof project,
+      startDateType: typeof startDate,
+      endDateType: typeof endDate,
+      headers: {
+        'content-type': req.headers['content-type'],
+        host: req.headers.host,
+        origin: req.headers.origin,
+        referer: req.headers.referer
+      }
+    })
 
     // 验证必要参数
     if (!project || !startDate || !endDate) {
@@ -16,14 +62,18 @@ exports.generateReport = async (req, res) => {
       })
     }
 
+    console.log('生成报表参数:', { project, startDate, endDate })
+
     // 构建查询条件
     const query = {
-      project,
+      project: { $regex: new RegExp(project.replace(/[·•]/g, '.?'), 'i') },
       orderDate: {
         $gte: new Date(startDate),
         $lte: new Date(endDate)
       }
     }
+
+    console.log('执行查询:', JSON.stringify(query))
 
     // 获取评价记录
     const reviews = await Review.find(query).sort({ orderDate: 1 })
@@ -211,7 +261,7 @@ exports.getFullReportData = async (req, res) => {
     
     // 构建查询条件
     const query = {
-      project,
+      project: { $regex: new RegExp(project.replace(/[·•]/g, '.?'), 'i') },
       orderDate: {
         $gte: new Date(startDate),
         $lte: new Date(endDate)

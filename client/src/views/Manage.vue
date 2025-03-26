@@ -239,9 +239,9 @@
         <el-form-item label="下单日期" prop="orderDate">
           <el-date-picker
             v-model="form.orderDate"
-            type="datetime"
+            type="date"
             placeholder="选择下单日期"
-            value-format="YYYY-MM-DD HH:mm:ss"
+            value-format="YYYY-MM-DD"
           />
         </el-form-item>
         <el-form-item label="预订人姓名" prop="customerName">
@@ -576,7 +576,7 @@ const handleEdit = async (row) => {
     
     // 修复日期格式
     if (reviewData.orderDate) {
-      form.orderDate = dayjs(reviewData.orderDate).format('YYYY-MM-DD HH:mm:ss')
+      form.orderDate = dayjs(reviewData.orderDate).format('YYYY-MM-DD')
     }
     
     if (reviewData.travelDate) {

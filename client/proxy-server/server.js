@@ -5,7 +5,7 @@ const fs = require('fs');
 
 // 配置
 const PORT = process.env.FRONTEND_PORT || 8080;
-const API_URL = process.env.API_URL || 'http://localhost:3000';
+const API_URL = process.env.API_URL || 'http://commentge-finalrelease.ns-dc2goees.svc.cluster.local:3000';
 const STATIC_DIR = path.resolve(__dirname, '../dist');
 
 // 创建Express应用

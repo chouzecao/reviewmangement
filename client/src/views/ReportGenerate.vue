@@ -162,6 +162,14 @@ const projectOptions = [
     value: '无界·长安'
   },
   {
+    label: '无界长安',
+    value: '无界长安'
+  },
+  {
+    label: '无界 长安',
+    value: '无界 长安'
+  },
+  {
     label: '兵马俑日游',
     value: '兵马俑日游'
   },
@@ -903,7 +911,7 @@ const generateMarkdownReport = (data) => {
 }
 
 // 导出PDF报告
-const handleExportPDF = async () => {
+const handleExportPDF = () => {
   if (!checkAuth()) return
   if (!reportData.value) {
     ElMessage.warning('请先生成报表')
@@ -914,147 +922,131 @@ const handleExportPDF = async () => {
     exportingPDF.value = true
     ElMessage.info('正在准备PDF报告，请稍候...')
     
-    // 获取完整的报表数据
-    const fullData = await fetchPDFReportData()
+    // 同步获取报表数据
+    const fullData = reportData.value
     
-    const { jsPDF } = await import('jspdf')
-    const doc = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4'
-    })
-    
-    // 使用helvetica字体（基础字体支持更好）
-    doc.setFont('helvetica')
-    
-    // 设置标题
-    doc.setFontSize(16)
-    doc.text(`${form.project} Report`, 105, 20, { align: 'center' })
-    
-    // 设置日期范围
-    doc.setFontSize(12)
-    doc.text(`Period: ${form.dateRange[0]} to ${form.dateRange[1]}`, 105, 30, { align: 'center' })
-    
-    // 摘要部分
-    doc.setFontSize(14)
-    doc.text('Summary', 20, 45)
-    doc.setFontSize(10)
-    doc.text(`Total Orders: ${fullData.summary.totalOrders}`, 20, 55)
-    doc.text(`Total Amount: ¥${fullData.summary.totalAmount.toFixed(2)}`, 20, 60)
-    doc.text(`Average Amount: ¥${fullData.summary.averageAmount.toFixed(2)}`, 20, 65)
-    
-    // 评价类型
-    let typeText = 'Review Types: ';
-    Object.keys(fullData.summary.reviewTypeStats).forEach((type, index) => {
-      const percentage = fullData.summary.reviewTypePercentage[type];
-      typeText += `${type}: ${fullData.summary.reviewTypeStats[type]} (${percentage}%)`;
-      if (index < Object.keys(fullData.summary.reviewTypeStats).length - 1) {
-        typeText += ', ';
-      }
-    });
-    doc.text(typeText, 20, 70, { maxWidth: 170 });
-    
-    // 数据量警告
-    if (fullData.summary.hasMoreData) {
-      doc.setTextColor(255, 0, 0);  // 红色
-      doc.text(`Note: Only showing ${fullData.reviews.length} of ${fullData.summary.totalAvailableRecords} records due to size limitations.`, 20, 75, { maxWidth: 170 });
-      doc.setTextColor(0, 0, 0);  // 重置为黑色
-    }
-    
-    // 评价记录部分
-    doc.setFontSize(14)
-    doc.text('Review Records', 20, 85)
-    
-    let yPos = 95
-    const pageHeight = doc.internal.pageSize.height
-    
-    // 添加页脚
-    const addFooter = (pageNum) => {
-      doc.setFontSize(8)
-      doc.text(`Page ${pageNum}`, 105, 290, { align: 'center' })
-    }
-    
-    let pageNum = 1
-    addFooter(pageNum)
-    
-    // 处理评价记录
-    fullData.reviews.slice(0, Math.min(fullData.reviews.length, 300)).forEach((review, index) => {
-      // 检查是否需要新页面
-      if (yPos > pageHeight - 50) {
-        doc.addPage()
-        pageNum++
-        addFooter(pageNum)
-        yPos = 20
-      }
+    // 同步引入jsPDF
+    import('jspdf').then(({ jsPDF }) => {
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      })
       
-      // 记录标题
+      // 使用helvetica字体（基础字体支持更好）
+      doc.setFont('helvetica')
+      
+      // 设置标题
+      doc.setFontSize(16)
+      doc.text(`${form.project} Report`, 105, 20, { align: 'center' })
+      
+      // 设置日期范围
       doc.setFontSize(12)
-      doc.text(`Record ${index + 1}`, 20, yPos)
-      yPos += 7
+      doc.text(`Period: ${form.dateRange[0]} to ${form.dateRange[1]}`, 105, 30, { align: 'center' })
       
-      // 记录内容
-      doc.setFontSize(9)
-      doc.text(`ID: ${review._id ? review._id.substring(0, 8) : 'N/A'}`, 20, yPos)
-      doc.text(`Customer: ${review.customerName || 'N/A'}`, 80, yPos)
-      yPos += 5
+      // 摘要部分
+      doc.setFontSize(14)
+      doc.text('Summary', 20, 45)
+      doc.setFontSize(10)
+      doc.text(`Total Orders: ${fullData.summary.totalOrders}`, 20, 55)
+      doc.text(`Total Amount: ¥${fullData.summary.totalAmount.toFixed(2)}`, 20, 60)
+      doc.text(`Average Amount: ¥${fullData.summary.averageAmount.toFixed(2)}`, 20, 65)
       
-      doc.text(`Order Date: ${formatDate(review.orderDate)}`, 20, yPos)
-      doc.text(`Travel Date: ${formatDate(review.travelDate)}`, 80, yPos)
-      yPos += 5
+      // 评价类型
+      let typeText = 'Review Types: ';
+      Object.keys(fullData.summary.reviewTypeStats).forEach((type, index) => {
+        const percentage = fullData.summary.reviewTypePercentage[type];
+        typeText += `${type}: ${fullData.summary.reviewTypeStats[type]} (${percentage}%)`;
+        if (index < Object.keys(fullData.summary.reviewTypeStats).length - 1) {
+          typeText += ', ';
+        }
+      });
+      doc.text(typeText, 20, 70, { maxWidth: 170 });
       
-      doc.text(`Product: ${review.product || 'N/A'}`, 20, yPos)
-      doc.text(`Amount: ¥${(review.amount || 0).toFixed(2)}`, 80, yPos)
-      yPos += 5
+      // 数据量警告
+      if (fullData.summary.hasMoreData) {
+        doc.setTextColor(255, 0, 0);  // 红色
+        doc.text(`Note: Only showing ${fullData.reviews.length} of ${fullData.summary.totalAvailableRecords} records due to size limitations.`, 20, 75, { maxWidth: 170 });
+        doc.setTextColor(0, 0, 0);  // 重置为黑色
+      }
       
-      doc.text(`Review Type: ${review.reviewType || 'N/A'}`, 20, yPos)
-      yPos += 5
+      // 评价记录部分
+      doc.setFontSize(14)
+      doc.text('Review Records', 20, 85)
       
-      // 检查评价内容是否存在
-      if (review.reviewContent) {
-        doc.text('Content:', 20, yPos)
-        yPos += 5
-        
-        // 截取较长的评价内容
-        const maxLength = 200;
-        let content = review.reviewContent;
-        if (content.length > maxLength) {
-          content = content.substring(0, maxLength) + '...';
+      let yPos = 95
+      const pageHeight = doc.internal.pageSize.height
+      
+      // 添加页脚
+      const addFooter = (pageNum) => {
+        doc.setFontSize(8)
+        doc.text(`Page ${pageNum}`, 105, 290, { align: 'center' })
+      }
+      
+      let pageNum = 1
+      addFooter(pageNum)
+      
+      // 处理评价记录
+      fullData.reviews.slice(0, Math.min(fullData.reviews.length, 300)).forEach((review, index) => {
+        // 检查是否需要新页面
+        if (yPos > pageHeight - 50) {
+          doc.addPage()
+          pageNum++
+          addFooter(pageNum)
+          yPos = 20
         }
         
-        const contentLines = doc.splitTextToSize(content, 170)
-        doc.text(contentLines, 20, yPos)
-        yPos += contentLines.length * 5
-      }
-      
-      // 添加页面边界，避免内容过长
-      const maxImages = 3;
-      let screenshotsProcessed = 0;
-      
-      // 处理截图
-      if (review.screenshots && review.screenshots.length > 0) {
-        const screenshots = review.screenshots.slice(0, maxImages);
-        const loadImage = (url) => {
-          return new Promise((resolve, reject) => {
-            console.log(`加载图片: ${url}`);
-            const img = new Image();
-            img.onload = () => {
-              console.log(`图片加载成功: ${url}, 尺寸: ${img.width}x${img.height}`);
-              resolve(img);
-            };
-            img.onerror = (err) => {
-              console.warn(`图片加载失败: ${url}, 错误:`, err);
-              reject(new Error(`Failed to load image: ${url}`));
-            };
-            img.src = url.startsWith('http') ? url : window.location.origin + url;
-          });
-        };
+        // 记录标题
+        doc.setFontSize(12)
+        doc.text(`Record ${index + 1}`, 20, yPos)
+        yPos += 7
         
-        try {
+        // 记录内容
+        doc.setFontSize(9)
+        doc.text(`ID: ${review._id ? review._id.substring(0, 8) : 'N/A'}`, 20, yPos)
+        doc.text(`Customer: ${review.customerName || 'N/A'}`, 80, yPos)
+        yPos += 5
+        
+        doc.text(`Order Date: ${formatDate(review.orderDate)}`, 20, yPos)
+        doc.text(`Travel Date: ${formatDate(review.travelDate)}`, 80, yPos)
+        yPos += 5
+        
+        doc.text(`Product: ${review.product || 'N/A'}`, 20, yPos)
+        doc.text(`Amount: ¥${(review.amount || 0).toFixed(2)}`, 80, yPos)
+        yPos += 5
+        
+        doc.text(`Review Type: ${review.reviewType || 'N/A'}`, 20, yPos)
+        yPos += 5
+        
+        // 检查评价内容是否存在
+        if (review.reviewContent) {
+          doc.text('Content:', 20, yPos)
+          yPos += 5
+          
+          // 截取较长的评价内容
+          const maxLength = 200;
+          let content = review.reviewContent;
+          if (content.length > maxLength) {
+            content = content.substring(0, maxLength) + '...';
+          }
+          
+          const contentLines = doc.splitTextToSize(content, 170)
+          doc.text(contentLines, 20, yPos)
+          yPos += contentLines.length * 5
+        }
+        
+        // 添加页面边界，避免内容过长
+        const maxImages = 3;
+        let screenshotsProcessed = 0;
+        
+        // 处理截图
+        if (review.screenshots && review.screenshots.length > 0) {
+          const screenshots = review.screenshots.slice(0, maxImages);
+          
           for (let i = 0; i < screenshots.length && screenshotsProcessed < maxImages; i++) {
-            const imgUrl = screenshots[i].originalPath;
             try {
+              const imgUrl = screenshots[i].originalPath;
               const absoluteUrl = imgUrl.startsWith('http') ? imgUrl : (imgUrl.startsWith('/') ? window.location.origin + imgUrl : window.location.origin + '/' + imgUrl);
-              const img = await loadImage(absoluteUrl);
               
               // 检查是否需要新页面
               if (yPos > pageHeight - 60) {
@@ -1064,80 +1056,81 @@ const handleExportPDF = async () => {
                 yPos = 20;
               }
               
-              // 添加截图
-              const imgDataUrl = await convertImageToDataURL(img, absoluteUrl);
-              if (imgDataUrl) {
-                try {
-                  doc.addImage(imgDataUrl, 'JPEG', 20, yPos, 50, 40);
-                  console.log(`成功添加图片 ${i + 1} 到PDF`);
-                  screenshotsProcessed++;
-                  yPos += 45;
-                } catch (imgError) {
-                  console.error(`添加图片到PDF失败:`, imgError);
-                }
+              // 直接在这里添加图片，不使用await
+              try {
+                doc.addImage(absoluteUrl, 'JPEG', 20, yPos, 50, 40);
+                console.log(`成功添加图片 ${i + 1} 到PDF`);
+                screenshotsProcessed++;
+              } catch (imageErr) {
+                console.warn(`无法添加图片到PDF: ${imageErr.message}`);
+                doc.text(`[Screenshot ${i+1} - Unable to display]`, 20, yPos + 20);
               }
-            } catch (loadError) {
-              console.warn(`无法加载截图 ${i + 1}:`, loadError);
+              
+              yPos += 45;
+            } catch (imgErr) {
+              console.warn(`无法处理图片: ${imgErr.message}`);
             }
           }
-        } catch (imageError) {
-          console.error(`处理图片时出错:`, imageError);
+          
+          if (screenshotsProcessed === 0) {
+            doc.text('无法显示截图', 20, yPos);
+            yPos += 5;
+          }
+        } else if (review.screenshot) {
+          // 兼容旧版本数据结构
+          try {
+            const imgUrl = review.screenshot;
+            const absoluteUrl = imgUrl.startsWith('http') ? imgUrl : (imgUrl.startsWith('/') ? window.location.origin + imgUrl : window.location.origin + '/' + imgUrl);
+            
+            // 检查是否需要新页面
+            if (yPos > pageHeight - 60) {
+              doc.addPage();
+              pageNum++;
+              addFooter(pageNum);
+              yPos = 20;
+            }
+            
+            // 直接添加图片
+            try {
+              doc.addImage(absoluteUrl, 'JPEG', 20, yPos, 50, 40);
+              console.log(`成功添加旧格式图片到PDF`);
+            } catch (imageErr) {
+              console.warn(`无法添加旧格式图片到PDF: ${imageErr.message}`);
+              doc.text('[Screenshot - Unable to display]', 20, yPos + 20);
+            }
+            
+            yPos += 45;
+          } catch (imgErr) {
+            console.warn(`无法处理旧格式图片: ${imgErr.message}`);
+            doc.text('无法显示截图', 20, yPos);
+            yPos += 5;
+          }
+        } else {
+          doc.text('No Screenshots', 20, yPos);
+          yPos += 5;
         }
         
-        if (screenshotsProcessed === 0) {
-          doc.text('无法显示截图', 20, yPos);
-          yPos += 5;
-        }
-      } else if (review.screenshot) {
-        try {
-          // 处理旧格式截图
-          const imgUrl = review.screenshot;
-          const absoluteUrl = imgUrl.startsWith('http') ? imgUrl : (imgUrl.startsWith('/') ? window.location.origin + imgUrl : window.location.origin + '/' + imgUrl);
-          const img = await loadImage(absoluteUrl);
-          
-          // 检查是否需要新页面
-          if (yPos > pageHeight - 60) {
-            doc.addPage();
-            pageNum++;
-            addFooter(pageNum);
-            yPos = 20;
-          }
-          
-          // 添加截图
-          const imgDataUrl = await convertImageToDataURL(img, absoluteUrl);
-          if (imgDataUrl) {
-            doc.addImage(imgDataUrl, 'JPEG', 20, yPos, 50, 40);
-            console.log(`成功添加旧格式图片到PDF`);
-            screenshotsProcessed++;
-            yPos += 45;
-          }
-        } catch (error) {
-          console.warn(`无法加载旧格式截图:`, error);
-          doc.text('无法显示截图', 20, yPos);
-          yPos += 5;
-        }
-      }
+        // 添加分隔线
+        yPos += 5;
+        doc.setDrawColor(200, 200, 200); // 灰色
+        doc.line(20, yPos, 190, yPos);
+        yPos += 10;
+      });
       
-      // 记录间隔
-      yPos += 5
-    })
-    
-    // 如果有记录数限制，添加说明
-    if (fullData.reviews.length < fullData.summary.totalOrders) {
-      doc.setFontSize(10);
-      doc.setTextColor(100, 100, 100); // 灰色
-      doc.text(`Note: Only ${fullData.reviews.length} of ${fullData.summary.totalOrders} records shown in this PDF.`, 20, yPos);
-    }
-    
-    // 保存PDF文件
-    doc.save(`${form.project}_Report_${form.dateRange[0]}_${form.dateRange[1]}.pdf`)
-    
-    ElMessage.success('PDF报告生成成功')
+      // 保存PDF
+      doc.save(`${form.project}_report_${new Date().toISOString().split('T')[0]}.pdf`);
+      ElMessage.success('PDF报告已生成');
+      
+      exportingPDF.value = false;
+    }).catch(error => {
+      console.error('加载jsPDF库失败:', error);
+      ElMessage.error('生成PDF报告失败: ' + error.message);
+      exportingPDF.value = false;
+    });
   } catch (error) {
-    console.error('PDF生成失败:', error)
-    ElMessage.error(error.message || 'PDF报告生成失败')
-  } finally {
-    exportingPDF.value = false
+    console.error('导出PDF报告时出错:', error);
+    ElMessage.error('导出PDF报告失败: ' + error.message);
+    exportingPDF.value = false;
   }
 }
 </script>

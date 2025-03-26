@@ -1,7 +1,7 @@
 {
   "rewrites": [
-    { "source": "/api/:path*", "destination": "http://localhost:3000/api/:path*" },
-    { "source": "/uploads/:path*", "destination": "http://localhost:3000/uploads/:path*" }
+    { "source": "/api/**", "destination": "http://127.0.0.1:3000/api/**" },
+    { "source": "/uploads/**", "destination": "http://127.0.0.1:3000/uploads/**" }
   ],
   "headers": [
     {

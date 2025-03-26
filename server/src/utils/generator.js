@@ -10,13 +10,74 @@ const familyNames = [
 
 const boyNames = [
   '伟', '强', '磊', '军', '洋', '勇', '刚', '杰', '峰', '超', '波', '辉', '涛', '斌', '康', '帅',
-  '凯', '浩', '东', '博', '文', '风', '光', '泽', '晨', '瑞', '朗', '兴', '昊', '天', '明', '阳'
+  '凯', '浩', '东', '博', '文', '风', '光', '泽', '晨', '瑞', '朗', '兴', '昊', '天', '明', '阳',
+  '志', '远', '宇', '浩', '宏', '旭', '诚', '永', '翔', '鸿', '哲', '瀚', '佳', '豪', '弘', '毅'
 ]
 
 const girlNames = [
   '芳', '娜', '敏', '静', '秀', '娟', '丽', '艳', '洁', '燕', '玲', '雪', '琳', '文', '婷', '雅',
-  '琴', '云', '莉', '兰', '梅', '月', '霞', '红', '萍', '玉', '露', '莹', '华', '菊', '珍', '璐'
+  '琴', '云', '莉', '兰', '梅', '月', '霞', '红', '萍', '玉', '露', '莹', '华', '菊', '珍', '璐',
+  '瑶', '婧', '琪', '晶', '妍', '璇', '嘉', '怡', '婉', '倩', '韵', '寒', '馨', '悦', '彤', '蕾'
 ]
+
+// 陕西省地区编码
+const shaanxiAreaCodes = {
+  // 西安市
+  '610100': {
+    '610102': '新城区',
+    '610103': '碑林区',
+    '610104': '莲湖区',
+    '610111': '灞桥区',
+    '610112': '未央区',
+    '610113': '雁塔区',
+    '610114': '阎良区',
+    '610115': '临潼区',
+    '610116': '长安区',
+    '610117': '高陵区',
+    '610118': '鄠邑区',
+    '610122': '蓝田县',
+    '610124': '周至县'
+  },
+  // 铜川市
+  '610200': {
+    '610202': '王益区',
+    '610203': '印台区',
+    '610204': '耀州区',
+    '610222': '宜君县'
+  },
+  // 宝鸡市
+  '610300': {
+    '610302': '渭滨区',
+    '610303': '金台区',
+    '610304': '陈仓区',
+    '610322': '凤翔县',
+    '610323': '岐山县',
+    '610324': '扶风县',
+    '610326': '眉县',
+    '610327': '陇县',
+    '610328': '千阳县',
+    '610329': '麟游县',
+    '610330': '凤县',
+    '610331': '太白县'
+  },
+  // 咸阳市
+  '610400': {
+    '610402': '秦都区',
+    '610403': '杨陵区',
+    '610404': '渭城区',
+    '610422': '三原县',
+    '610423': '泾阳县',
+    '610424': '乾县',
+    '610425': '礼泉县',
+    '610426': '永寿县',
+    '610428': '长武县',
+    '610429': '旬邑县',
+    '610430': '淳化县',
+    '610431': '武功县',
+    '610481': '兴平市',
+    '610482': '彬州市'
+  }
+}
 
 // 生成随机整数
 const randomInt = (min, max) => {
@@ -28,7 +89,19 @@ const generateName = () => {
   const familyName = familyNames[randomInt(0, familyNames.length - 1)]
   const gender = Math.random() < 0.5 ? 'male' : 'female'
   const namesList = gender === 'male' ? boyNames : girlNames
-  const givenName = namesList[randomInt(0, namesList.length - 1)]
+  
+  // 随机决定是双字名还是三字名
+  const isTripleName = Math.random() < 0.3 // 30%的概率生成三字名
+  
+  let givenName
+  if (isTripleName) {
+    const firstName = namesList[randomInt(0, namesList.length - 1)]
+    const secondName = namesList[randomInt(0, namesList.length - 1)]
+    givenName = firstName + secondName
+  } else {
+    givenName = namesList[randomInt(0, namesList.length - 1)]
+  }
+  
   return {
     name: familyName + givenName,
     gender
@@ -64,11 +137,22 @@ const generateCheckCode = (body) => {
 
 // 生成随机身份证号
 const generateIdCard = (provinceCode = null) => {
-  // 如果没有指定省份，随机选择一个
-  const province = provinceCode || String(randomInt(11, 65))
-  // 随机生成4位地区码（省份码+城市码）
-  const city = randomInt(1, 9).toString().padStart(2, '0')
-  const district = randomInt(1, 9).toString().padStart(2, '0')
+  let areaCode
+  
+  if (provinceCode === '61') {
+    // 陕西省的情况
+    const cityKeys = Object.keys(shaanxiAreaCodes)
+    const randomCity = cityKeys[randomInt(0, cityKeys.length - 1)]
+    const districtKeys = Object.keys(shaanxiAreaCodes[randomCity])
+    const randomDistrict = districtKeys[randomInt(0, districtKeys.length - 1)]
+    areaCode = randomDistrict
+  } else {
+    // 其他省份的情况
+    const province = provinceCode || String(randomInt(11, 65))
+    const city = randomInt(1, 9).toString().padStart(2, '0')
+    const district = randomInt(1, 9).toString().padStart(2, '0')
+    areaCode = `${province}${city}${district}`
+  }
   
   // 生成出生日期
   const birthDate = generateBirthDate()
@@ -78,7 +162,7 @@ const generateIdCard = (provinceCode = null) => {
   const gender = Math.random() < 0.5 ? '1' : '2' // 1为男，2为女
   
   // 拼接身份证前17位
-  const body = `${province}${city}${district}${birthDate}${sequence}${gender}`
+  const body = `${areaCode}${birthDate}${sequence}${gender}`
   
   // 计算校验码
   const checkCode = generateCheckCode(body)

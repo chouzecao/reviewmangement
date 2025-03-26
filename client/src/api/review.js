@@ -107,13 +107,13 @@ export const getReviewDetail = (id) => {
   return instance.get(`/reviews/${id}`)
 }
 
-// 上传截图
+// 上传评价截图
 export const uploadScreenshot = (id, formData) => {
   return instance.post(`/reviews/${id}/screenshots`, formData, {
     headers: {
       'Content-Type': 'multipart/form-data'
     }
-  })
+  });
 }
 
 // 删除评价

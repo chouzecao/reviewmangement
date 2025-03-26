@@ -161,7 +161,7 @@ done
 cd "/home/devbox/project/client" || { log_error "无法进入前端目录"; exit 1; }
 log "启动前端代理服务..."
 # 设置API_URL环境变量以确保代理正确指向后端
-export API_URL="http://localhost:\${PORT}"
+export API_URL="http://commentge-finalrelease.ns-dc2goees.svc.cluster.local:3000"
 nohup node proxy-server/server.js > frontend.log 2>&1 &
 FRONTEND_PID=\$!
 log "前端代理服务已启动，PID: \${FRONTEND_PID}"
