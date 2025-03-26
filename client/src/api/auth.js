@@ -1,5 +1,6 @@
 import axios from 'axios'
 import baseURL from './baseURL'
+import { fixUrlInConfig } from '../utils/urlFixer'
 
 // 使用集中管理的baseURL
 const instance = axios.create({
@@ -15,7 +16,9 @@ instance.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
-    return config
+    
+    // 使用URL修复工具处理硬编码URL问题
+    return fixUrlInConfig(config)
   },
   error => {
     return Promise.reject(error)
