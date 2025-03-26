@@ -16,10 +16,15 @@ instance.interceptors.request.use(
     const token = localStorage.getItem('token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
+      // 添加调试日志
+      console.log(`API请求: ${config.method?.toUpperCase()} ${config.url} - 携带Token: ${token.substring(0, 15)}...`)
+    } else {
+      console.warn(`API请求: ${config.method?.toUpperCase()} ${config.url} - 未找到Token`)
     }
     return config
   },
   error => {
+    console.error('请求拦截器错误:', error)
     return Promise.reject(error)
   }
 )
@@ -46,10 +51,32 @@ instance.interceptors.response.use(
       
       // 处理401未授权错误
       if (error.response.status === 401) {
-        console.warn('用户认证失败，即将重定向到登录页面');
+        console.warn('用户认证失败: 请求路径:', error.config.url)
+        // 显示提示信息（如果有弹窗组件）
+        try {
+          if (window.ElMessage) {
+            window.ElMessage.error('登录已过期，请重新登录')
+          }
+        } catch (e) {
+          console.error('显示消息失败:', e)
+        }
+
+        // 清除认证信息
         localStorage.removeItem('token')
         localStorage.removeItem('user')
-        window.location.href = '/login'
+        
+        // 记录当前页面，以便重新登录后可以返回
+        try {
+          sessionStorage.setItem('redirect_after_login', window.location.pathname)
+        } catch (e) {
+          console.error('保存重定向信息失败:', e)
+        }
+        
+        // 延迟重定向，给用户时间看到提示
+        setTimeout(() => {
+          window.location.href = '/login'
+        }, 1500)
+        
         return Promise.reject(new Error('会话已过期，请重新登录'))
       }
       

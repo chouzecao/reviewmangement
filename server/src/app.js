@@ -13,13 +13,13 @@ const app = express();
 
 // CORS中间件配置，明确允许所有跨域请求
 app.use(cors({
-    origin: function(origin, callback) {
-        // 允许所有来源，但支持withCredentials
-        callback(null, origin);
-    },
+    origin: true, // 允许请求的来源 - 生产环境中可以设置为具体域名
     credentials: true, // 重要：允许携带凭证
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    exposedHeaders: ['Content-Disposition'], // 允许客户端访问的响应头
+    // 增加预检请求缓存时间，减少OPTIONS请求
+    maxAge: 86400 // 24小时
 }));
 
 app.use(express.json());

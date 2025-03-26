@@ -82,13 +82,30 @@ const handleLogin = async () => {
     loading.value = true
 
     const data = await login(loginForm)
+    
+    // 验证返回的token
+    if (!data.token) {
+      throw new Error('登录成功但未返回有效的token')
+    }
+    
+    // 保存认证信息
     localStorage.setItem('token', data.token)
     localStorage.setItem('user', JSON.stringify(data.user))
+    
+    // 记录登录时间
+    localStorage.setItem('login_time', Date.now().toString())
+    
+    console.log('登录成功，Token已保存')
     ElMessage.success('登录成功')
-    router.push('/')
+    
+    // 检查是否有重定向地址
+    const redirectPath = sessionStorage.getItem('redirect_after_login') || '/'
+    sessionStorage.removeItem('redirect_after_login')
+    
+    router.push(redirectPath)
   } catch (error) {
     console.error('登录失败:', error)
-    ElMessage.error('用户名或密码错误')
+    ElMessage.error(error.message || '用户名或密码错误')
   } finally {
     loading.value = false
   }

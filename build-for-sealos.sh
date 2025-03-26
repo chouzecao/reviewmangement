@@ -30,7 +30,7 @@ log "后端依赖安装完成"
 # 创建生产环境配置文件
 cat <<EOF > .env.production
 SERVER_PORT=3000
-MONGODB_URI=mongodb://root:8gx89ljj@comdb-mongodb.ns-dc2goees.svc:27017/reviewdb?authSource=admin
+MONGODB_URI=mongodb://root:8gx89ljj@comdb-mongodb.ns-dc2goees.svc:27017/review_management?authSource=admin
 EOF
 log "后端环境配置完成"
 

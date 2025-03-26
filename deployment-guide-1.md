@@ -28,7 +28,7 @@
    PORT=3000
    HOST=0.0.0.0
    FRONTEND_PORT=8080
-   MONGODB_URI=mongodb://root:8gx89ljj@comdb-mongodb.ns-dc2goees.svc:27017/reviewdb?authSource=admin
+   MONGODB_URI=mongodb://root:8gx89ljj@comdb-mongodb.ns-dc2goees.svc:27017/review_management?authSource=admin
    JWT_SECRET=finnertrip-review-management-secret
    SESSION_SECRET=finnertrip-session-secret
    UPLOAD_DIR=uploads
