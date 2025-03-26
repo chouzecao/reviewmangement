@@ -8,6 +8,12 @@ const PORT = process.env.FRONTEND_PORT || 8080;
 const API_URL = process.env.API_URL || 'http://commentge-finalrelease.ns-dc2goees.svc.cluster.local:3000';
 const STATIC_DIR = path.resolve(__dirname, '../dist');
 
+// 打印配置信息
+console.log(`[${new Date().toISOString()}] 代理服务器配置:`);
+console.log(`[${new Date().toISOString()}] - 端口: ${PORT}`);
+console.log(`[${new Date().toISOString()}] - API URL: ${API_URL}`);
+console.log(`[${new Date().toISOString()}] - 静态目录: ${STATIC_DIR}`);
+
 // 创建Express应用
 const app = express();
 
@@ -15,6 +21,14 @@ const app = express();
 app.use((req, res, next) => {
   const start = Date.now();
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} 开始处理`);
+  
+  // 记录请求头信息
+  console.log(`[${new Date().toISOString()}] 请求头:`, JSON.stringify({
+    host: req.headers.host,
+    origin: req.headers.origin,
+    referer: req.headers.referer,
+    'user-agent': req.headers['user-agent']
+  }));
   
   res.on('finish', () => {
     const duration = Date.now() - start;
@@ -29,14 +43,22 @@ const apiProxy = createProxyMiddleware({
   target: API_URL,
   changeOrigin: true,
   pathRewrite: {
-    '^/api': '/api' // 保持路径不变
+    '^/api': '/api' 
   },
-  // 支持所有HTTP方法
-  // 支持文件上传
+  // 详细日志记录
+  logLevel: 'debug',
   onProxyReq: (proxyReq, req, res) => {
+    // 记录代理请求信息
+    console.log(`[${new Date().toISOString()}] 代理请求: ${req.method} ${req.url} -> ${proxyReq.path}`);
+    
     // 维持原始请求头
     if (req.headers['content-type'] && req.headers['content-type'].includes('multipart/form-data')) {
       console.log(`[${new Date().toISOString()}] 检测到文件上传请求`);
+    }
+    
+    // 确保Authorization头被正确传递
+    if (req.headers.authorization) {
+      console.log(`[${new Date().toISOString()}] 带有Authorization请求: ${req.url.substring(0, 100)}`);
     }
   },
   // 增加超时设置，文件上传可能需要更长时间
