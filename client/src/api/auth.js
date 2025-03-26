@@ -1,9 +1,7 @@
 import axios from 'axios'
+import baseURL from './baseURL'
 
-// 使用环境变量或自动检测API地址
-const apiUrl = import.meta.env.VITE_API_URL || '/api'
-const baseURL = apiUrl
-
+// 使用集中管理的baseURL
 const instance = axios.create({
   baseURL,
   timeout: 10000,
