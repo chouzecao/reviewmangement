@@ -7,12 +7,8 @@
 export const containsHardcodedDomain = (url) => {
   if (!url || typeof url !== 'string') return false;
   
-  // 检查常见的硬编码域名模式
-  return (
-    url.includes('sd.finnertrip.com') || 
-    url.includes('finnertrip.com') ||
-    (url.startsWith('http') && !url.startsWith('http://localhost'))
-  );
+  // 检查是否包含协议头(http://或https://)，表示这是一个绝对URL
+  return url.startsWith('http://') || url.startsWith('https://');
 };
 
 // 修复硬编码URL，转换为相对路径
