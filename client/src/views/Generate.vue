@@ -100,6 +100,8 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import axios from 'axios'
+import { getToken } from '../utils/token'
 
 const router = useRouter()
 const formRef = ref(null)
@@ -201,27 +203,15 @@ const handleGenerate = async () => {
     await formRef.value.validate()
     
     loading.value = true
-    const response = await fetch('/api/reviews/generate', {
-      method: 'POST',
+    // 使用axios替代fetch，自动应用拦截器
+    const response = await axios.post('/api/reviews/generate', form, {
       headers: {
-        'Content-Type': 'application/json'
-      },
-      credentials: 'include',
-      body: JSON.stringify(form)
+        'Authorization': `Bearer ${getToken()}` // 直接添加Token
+      }
     })
 
-    if (response.status === 401) {
-      ElMessage.error('登录已过期，请重新登录')
-      localStorage.removeItem('user')
-      router.push('/login')
-      return
-    }
-
-    if (!response.ok) {
-      throw new Error('生成失败')
-    }
-
-    const data = await response.json()
+    // axios直接返回data
+    const data = response.data
     if (data.success) {
       ElMessage.success('生成成功')
       tableData.value = data.data
@@ -230,6 +220,13 @@ const handleGenerate = async () => {
     }
   } catch (error) {
     console.error('生成失败:', error)
+    // 处理401错误
+    if (error.response && error.response.status === 401) {
+      ElMessage.error('登录已过期，请重新登录')
+      localStorage.removeItem('user')
+      router.push('/login')
+      return
+    }
     ElMessage.error(error.message || '生成失败')
   } finally {
     loading.value = false
@@ -246,29 +243,17 @@ const handleImport = async () => {
 
   try {
     importing.value = true
-    const response = await fetch('/api/reviews/import', {
-      method: 'POST',
+    // 使用axios替代fetch，自动应用拦截器
+    const response = await axios.post('/api/reviews/import', {
+      reviews: tableData.value
+    }, {
       headers: {
-        'Content-Type': 'application/json'
-      },
-      credentials: 'include',
-      body: JSON.stringify({
-        reviews: tableData.value
-      })
+        'Authorization': `Bearer ${getToken()}` // 直接添加Token
+      }
     })
 
-    if (response.status === 401) {
-      ElMessage.error('登录已过期，请重新登录')
-      localStorage.removeItem('user')
-      router.push('/login')
-      return
-    }
-
-    if (!response.ok) {
-      throw new Error('导入失败')
-    }
-
-    const data = await response.json()
+    // axios直接返回data
+    const data = response.data
     if (data.success) {
       ElMessage.success('导入成功')
       tableData.value = []
@@ -278,6 +263,13 @@ const handleImport = async () => {
     }
   } catch (error) {
     console.error('导入失败:', error)
+    // 处理401错误
+    if (error.response && error.response.status === 401) {
+      ElMessage.error('登录已过期，请重新登录')
+      localStorage.removeItem('user')
+      router.push('/login')
+      return
+    }
     ElMessage.error(error.message || '导入失败')
   } finally {
     importing.value = false
