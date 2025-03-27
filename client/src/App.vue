@@ -1,5 +1,5 @@
 <script setup>
-import HelloWorld from './components/HelloWorld.vue'
+// App.vue是应用根组件
 </script>
 
 <template>
@@ -10,17 +10,26 @@ import HelloWorld from './components/HelloWorld.vue'
   </router-view>
 </template>
 
-<style scoped>
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
+<style>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
 }
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #42b883aa);
+
+/* 全局样式 */
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+}
+
+#app {
+  height: 100vh;
+  width: 100vw;
 }
 </style>
